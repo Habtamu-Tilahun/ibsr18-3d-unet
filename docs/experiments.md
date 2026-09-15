@@ -2,27 +2,39 @@
 
 This document records the controlled experiments used to evaluate the IBSR-18 3D brain tissue segmentation pipeline.
 
-The experiments progressively evaluate:
+The experiments investigate three main questions:
 
-1. residual versus conventional 3D U-Net architecture,
-2. native versus 1 mm isotropic voxel spacing, and
-3. the effect of N4 MRI bias-field correction.
+1. Does a residual 3D U-Net outperform a conventional 3D U-Net?
+2. Does resampling MRI volumes to 1 mm isotropic spacing improve segmentation?
+3. Does N4 MRI bias-field correction improve segmentation performance?
 
 All experiments use the same train/validation split and evaluation protocol unless explicitly stated otherwise.
 
-## Dataset
+---
+
+# Dataset
 
 The project uses the IBSR-18 T1-weighted brain MRI dataset.
 
-### Splits
+## Splits
 
-* **Training:** IBSR_01, IBSR_03, IBSR_04, IBSR_05, IBSR_06, IBSR_07, IBSR_08, IBSR_09, IBSR_16, IBSR_18
-* **Validation:** IBSR_11, IBSR_12, IBSR_13, IBSR_14, IBSR_17
-* **Test:** IBSR_02, IBSR_10, IBSR_15
+### Training
 
-The public test split does not contain ground-truth segmentation labels, so quantitative evaluation is performed on the validation set.
+IBSR_01, IBSR_03, IBSR_04, IBSR_05, IBSR_06, IBSR_07, IBSR_08, IBSR_09, IBSR_16, IBSR_18
 
-### Segmentation labels
+### Validation
+
+IBSR_11, IBSR_12, IBSR_13, IBSR_14, IBSR_17
+
+### Test
+
+IBSR_02, IBSR_10, IBSR_15
+
+The test split used by this project does not contain ground-truth segmentation labels. Therefore, quantitative model selection is performed exclusively on the validation set.
+
+The test subjects are subsequently used for unseen-subject inference and qualitative generalization assessment.
+
+## Segmentation labels
 
 | Label | Tissue            |
 | ----: | ----------------- |
@@ -45,72 +57,104 @@ $$
 }{3}
 $$
 
+Background Dice is reported for completeness but is excluded from the primary model-selection metric.
+
+---
+
+# Common training configuration
+
+Unless otherwise specified, the experiments use:
+
+* 3D U-Net architecture
+* 100 training epochs
+* native or explicitly configured target spacing
+* `96 × 96 × 96` training patches
+* batch size of 1
+* Dice + cross-entropy loss
+* PyTorch
+* MONAI
+* foreground cropping
+* intensity normalization
+* randomized spatial/intensity augmentation
+* validation after training
+* best validation checkpoint selection
+
+The validation pipeline does not use training-time augmentation.
+
 ---
 
 # Experiment 1 — Residual 3D U-Net, Native Spacing
 
-### Objective
+## Objective
 
-Establish the main segmentation baseline using a residual 3D U-Net while preserving each subject's native voxel spacing.
+Establish the primary segmentation baseline using a residual 3D U-Net while preserving each subject's native voxel spacing.
 
-### Configuration
+## Configuration
 
-* **Architecture:** 3D U-Net
-* **Residual units:** 2
-* **Voxel spacing:** Native
-* **Target spacing:** None
-* **Training epochs:** 100
-* **Best checkpoint:** Epoch 98
-* **N4 bias correction:** Disabled
-* **Runtime N4:** Disabled
-* **Precomputed N4:** Disabled
+| Parameter           | Value    |
+| ------------------- | -------- |
+| Architecture        | 3D U-Net |
+| Residual units      | 2        |
+| Voxel spacing       | Native   |
+| Target spacing      | None     |
+| Training epochs     | 100      |
+| Selected checkpoint | Epoch 99 |
+| N4 bias correction  | Disabled |
+| Runtime N4          | Disabled |
+| Precomputed N4      | Disabled |
 
-The preprocessing pipeline includes RAS reorientation, percentile-based intensity normalization, foreground cropping, random 3D patch sampling, and spatial/intensity augmentation.
+The preprocessing pipeline includes RAS reorientation, intensity normalization, foreground cropping, random 3D patch sampling, and spatial/intensity augmentation.
 
-### Validation results
+## Final validation results
 
 | Class               |       Dice |
 | ------------------- | ---------: |
-| Background          |     0.9826 |
-| CSF                 |     0.8359 |
-| GM                  |     0.9104 |
-| WM                  |     0.8949 |
-| **Mean foreground** | **0.8804** |
+| Background          |     0.9718 |
+| CSF                 |     0.8437 |
+| GM                  |     0.9055 |
+| WM                  |     0.9028 |
+| **Mean foreground** | **0.8840** |
 
-### Per-subject foreground Dice
+The final checkpoint was selected based on validation performance.
 
-| Subject | Mean foreground Dice |
-| ------- | -------------------: |
-| IBSR_11 |               0.8806 |
-| IBSR_12 |               0.8926 |
-| IBSR_13 |               0.8501 |
-| IBSR_14 |               0.8969 |
-| IBSR_17 |               0.8818 |
+## Per-subject validation results
 
-### Result
+The final checkpoint was evaluated independently on IBSR_11, IBSR_12, IBSR_13, IBSR_14, and IBSR_17.
 
-The residual 3D U-Net provides the strongest baseline and is used as the reference configuration for subsequent preprocessing experiments.
+| Subject |    CSF |     GM |     WM |
+| ------- | -----: | -----: | -----: |
+| IBSR_11 | 0.8183 | 0.9032 | 0.9212 |
+| IBSR_12 | 0.8624 | 0.8882 | 0.9029 |
+| IBSR_13 | 0.8032 | 0.9043 | 0.8790 |
+| IBSR_14 | 0.8448 | 0.9206 | 0.9149 |
+| IBSR_17 | 0.8899 | 0.9115 | 0.8959 |
+
+## Result
+
+The residual 3D U-Net provides the strongest overall configuration among the evaluated experiments and is selected as the final model.
 
 ---
 
 # Experiment 2 — Residual 3D U-Net, 1 mm Isotropic Spacing
 
-### Objective
+## Objective
 
 Evaluate whether resampling all subjects to a common 1 mm isotropic voxel spacing improves segmentation performance.
 
-### Configuration
+## Configuration
 
 The model and training procedure are kept consistent with Experiment 1.
 
-* **Architecture:** 3D U-Net
-* **Residual units:** 2
-* **Voxel spacing:** 1 × 1 × 1 mm
-* **N4 bias correction:** Disabled
-* **Training epochs:** 100
-* **Best checkpoint:** Epoch 99
+| Parameter           | Value        |
+| ------------------- | ------------ |
+| Architecture        | 3D U-Net     |
+| Residual units      | 2            |
+| Voxel spacing       | 1 × 1 × 1 mm |
+| N4 bias correction  | Disabled     |
+| Training epochs     | 100          |
+| Selected checkpoint | Epoch 99     |
 
-### Validation results
+## Validation results
 
 | Class               |       Dice |
 | ------------------- | ---------: |
@@ -120,36 +164,40 @@ The model and training procedure are kept consistent with Experiment 1.
 | WM                  |     0.8911 |
 | **Mean foreground** | **0.8748** |
 
-### Comparison with Experiment 1
+## Comparison with Experiment 1
 
 $$
-0.8748 - 0.8804 = -0.0056
+0.8748 - 0.8840 = -0.0092
 $$
 
-Resampling to 1 mm isotropic spacing reduced mean foreground Dice by **0.0056**.
+Resampling to 1 mm isotropic spacing reduced mean foreground Dice by **0.0092**.
 
-### Result
+## Result
 
-For this dataset and model configuration, 1 mm isotropic resampling did not improve segmentation performance. The native-spacing configuration is therefore retained for subsequent experiments.
+For this dataset and model configuration, 1 mm isotropic resampling did not improve segmentation performance.
+
+The native-spacing configuration was therefore retained.
 
 ---
 
 # Experiment 3 — Conventional 3D U-Net, Native Spacing
 
-### Objective
+## Objective
 
 Measure the contribution of residual units by comparing the residual U-Net against an otherwise comparable conventional 3D U-Net.
 
-### Configuration
+## Configuration
 
-* **Architecture:** 3D U-Net
-* **Residual units:** 0
-* **Voxel spacing:** Native
-* **N4 bias correction:** Disabled
-* **Training epochs:** 100
-* **Best checkpoint:** Epoch 99
+| Parameter           | Value    |
+| ------------------- | -------- |
+| Architecture        | 3D U-Net |
+| Residual units      | 0        |
+| Voxel spacing       | Native   |
+| N4 bias correction  | Disabled |
+| Training epochs     | 100      |
+| Selected checkpoint | Epoch 99 |
 
-### Validation results
+## Validation results
 
 | Class               |       Dice |
 | ------------------- | ---------: |
@@ -159,56 +207,63 @@ Measure the contribution of residual units by comparing the residual U-Net again
 | WM                  |     0.8764 |
 | **Mean foreground** | **0.8493** |
 
-### Comparison with Experiment 1
+## Comparison with the final residual model
 
 | Metric              | Conventional U-Net | Residual U-Net | Improvement |
 | ------------------- | -----------------: | -------------: | ----------: |
-| CSF                 |             0.7730 |         0.8359 |     +0.0629 |
-| GM                  |             0.8985 |         0.9104 |     +0.0119 |
-| WM                  |             0.8764 |         0.8949 |     +0.0185 |
-| **Mean foreground** |         **0.8493** |     **0.8804** | **+0.0311** |
+| CSF                 |             0.7730 |         0.8437 |     +0.0707 |
+| GM                  |             0.8985 |         0.9055 |     +0.0070 |
+| WM                  |             0.8764 |         0.9028 |     +0.0264 |
+| **Mean foreground** |         **0.8493** |     **0.8840** | **+0.0347** |
 
-### Result
+## Result
 
-Adding residual units produced a substantial improvement in segmentation performance, with the largest gain observed for CSF.
+Residual connections produced a substantial improvement in segmentation performance.
 
-The residual 3D U-Net is therefore retained as the primary model architecture.
+The largest class-specific improvement occurred for CSF, while GM and WM also improved.
+
+This experiment supports retaining the residual architecture as the final model.
 
 ---
 
 # Experiment 4 — Residual 3D U-Net with Precomputed N4 Correction
 
-### Objective
+## Objective
 
 Evaluate whether MRI bias-field correction improves tissue segmentation when applied as deterministic preprocessing.
 
-### Motivation
+## Motivation
 
-T1-weighted MRI can contain low-frequency intensity inhomogeneity (bias field). N4 bias-field correction was evaluated as a preprocessing step while keeping the model architecture and native voxel spacing unchanged.
+T1-weighted MRI can contain low-frequency intensity inhomogeneity, commonly referred to as bias field.
 
-### N4 preprocessing
+N4 bias-field correction was therefore evaluated as a preprocessing intervention while keeping the model architecture and native voxel spacing unchanged.
+
+## N4 preprocessing
 
 N4 correction was performed once per subject and stored as precomputed volumes to avoid repeating the computationally expensive correction during every training epoch.
 
 Final N4 configuration:
 
-* **Implementation:** SimpleITK N4BiasFieldCorrectionImageFilter
-* **Shrink factor:** 4
-* **Maximum iterations:** `[50, 50, 50, 50]`
-* **Convergence threshold:** 0.001
-* **B-spline control points:** `[4, 4, 4]`
-* **Foreground mask:** `image > 0`
-* **Runtime N4 during training:** Disabled
-* **Precomputed N4 during training:** Enabled
-* **Target spacing:** Native
+| Parameter               | Value                                      |
+| ----------------------- | ------------------------------------------ |
+| Implementation          | SimpleITK N4BiasFieldCorrectionImageFilter |
+| Shrink factor           | 4                                          |
+| Maximum iterations      | `[50, 50, 50, 50]`                         |
+| Convergence threshold   | 0.001                                      |
+| B-spline control points | `[4, 4, 4]`                                |
+| Foreground mask         | `image > 0`                                |
+| Runtime N4              | Disabled                                   |
+| Precomputed N4          | Enabled                                    |
+| Target spacing          | Native                                     |
 
-The corrected image was generated using the estimated multiplicative bias field:
+The corrected image was generated from the estimated multiplicative bias field:
 
 $$
-I_{corrected}
+I_{\mathrm{corrected}}
 =
-\exp\left(
-\log(\max(I, \epsilon))
+\exp
+\left(
+\log(\max(I,\epsilon))
 -
 \log(B)
 \right)
@@ -216,48 +271,56 @@ $$
 
 with the original zero-valued background restored.
 
-### N4 preprocessing quality control
+---
 
-All **18 IBSR-18 subjects** passed automated QC before training.
+## N4 preprocessing quality control
 
-The QC verified:
+All **18 IBSR-18 subjects passed automated N4 preprocessing QC** before the segmentation experiment was started.
 
-* image geometry preservation,
-* matching foreground voxel counts,
-* finite image and bias-field values,
-* valid positive bias fields,
-* reconstruction consistency,
-* spatial smoothness of the estimated bias field.
+The QC process checked:
 
-The reconstruction check used:
+* image geometry preservation
+* foreground voxel preservation
+* finite image and bias-field values
+* positive bias-field values
+* reconstruction consistency
+* spatial smoothness of the estimated bias field
 
-$$
-I_{N4}(x) \times B(x) \approx I_{raw}(x)
-$$
-
-with a P99 relative-error acceptance threshold of `1 × 10⁻⁴`.
-
-All 18 subjects passed this criterion, with observed P99 relative reconstruction errors approximately in the range:
+The reconstruction check verified:
 
 $$
-3.4\times10^{-7}
-\; \text{to} \;
-4.4\times10^{-7}
+I_{\mathrm{N4}}(x) \times B(x)
+\approx
+I_{\mathrm{raw}}(x)
 $$
 
-The bias-field P95 spatial gradient also remained below the defined review threshold for every subject.
+using a P99 relative-error acceptance threshold of:
 
-### Segmentation configuration
+$$
+1\times10^{-4}
+$$
 
-* **Architecture:** Residual 3D U-Net
-* **Residual units:** 2
-* **Voxel spacing:** Native
-* **Precomputed N4:** Enabled
-* **Runtime N4:** Disabled
-* **Training epochs:** 100
-* **Best checkpoint:** Epoch 100
+All subjects passed this criterion.
 
-### Validation results
+The estimated bias fields also remained below the predefined spatial-gradient review threshold.
+
+This confirms that the finalized N4 preprocessing pipeline itself was technically valid before evaluating its effect on segmentation.
+
+---
+
+## Segmentation configuration
+
+| Parameter           | Value             |
+| ------------------- | ----------------- |
+| Architecture        | Residual 3D U-Net |
+| Residual units      | 2                 |
+| Voxel spacing       | Native            |
+| Precomputed N4      | Enabled           |
+| Runtime N4          | Disabled          |
+| Training epochs     | 100               |
+| Selected checkpoint | Epoch 100         |
+
+## Validation results
 
 | Class               |       Dice |
 | ------------------- | ---------: |
@@ -267,74 +330,250 @@ The bias-field P95 spatial gradient also remained below the defined review thres
 | WM                  |     0.8939 |
 | **Mean foreground** | **0.8777** |
 
-### Per-subject results
-
-| Subject | Mean foreground Dice |
-| ------- | -------------------: |
-| IBSR_11 |               0.8783 |
-| IBSR_12 |               0.8767 |
-| IBSR_13 |               0.8545 |
-| IBSR_14 |               0.8976 |
-| IBSR_17 |               0.8814 |
-
-### Comparison with Experiment 1
+## Comparison with the final native/no-N4 model
 
 | Metric              | Native baseline | N4 corrected |           Δ |
 | ------------------- | --------------: | -----------: | ----------: |
-| CSF                 |          0.8359 |       0.8408 |     +0.0049 |
-| GM                  |          0.9104 |       0.8984 |     −0.0120 |
-| WM                  |          0.8949 |       0.8939 |     −0.0010 |
-| **Mean foreground** |      **0.8804** |   **0.8777** | **−0.0027** |
+| CSF                 |          0.8437 |       0.8408 |     −0.0029 |
+| GM                  |          0.9055 |       0.8984 |     −0.0071 |
+| WM                  |          0.9028 |       0.8939 |     −0.0089 |
+| **Mean foreground** |      **0.8840** |   **0.8777** | **−0.0063** |
 
-### Result
+## Result
 
-N4 correction produced a small reduction in mean foreground Dice:
+N4 correction did not improve the final segmentation performance.
 
 $$
-0.8777 - 0.8804 = -0.0027
+0.8777 - 0.8840 = -0.0063
 $$
 
-The effect is therefore approximately **0.27 percentage points** and substantially smaller than the improvement obtained from residual connections.
+The N4 configuration therefore performed **0.0063 lower in mean foreground Dice** than the selected native/no-N4 model.
 
-The result suggests that, for this dataset and model configuration, N4 bias-field correction is **approximately neutral but does not provide a measurable segmentation benefit**.
+The result is not attributed to a failure of the N4 preprocessing implementation: all 18 subjects passed the independent preprocessing QC procedure.
 
-Importantly, the absence of improvement is not attributed to a preprocessing failure: the finalized N4 pipeline passed automated QC for all 18 subjects.
+For this dataset and model configuration, the simpler native/no-N4 preprocessing pipeline is therefore preferred.
 
 ---
 
 # Overall Comparison
 
-| Experiment | Architecture       | Spacing        | N4  | Mean FG Dice | Best Epoch |
-| ---------- | ------------------ | -------------- | --- | -----------: | ---------: |
-| **1**      | Residual U-Net     | Native         | No  |   **0.8804** |         98 |
-| **2**      | Residual U-Net     | 1 mm isotropic | No  |       0.8748 |         99 |
-| **3**      | Conventional U-Net | Native         | No  |       0.8493 |         99 |
-| **4**      | Residual U-Net     | Native         | Yes |       0.8777 |        100 |
+| Experiment    | Architecture       | Spacing        | N4  | Mean FG Dice | Selected Epoch |
+| ------------- | ------------------ | -------------- | --- | -----------: | -------------: |
+| **1 — Final** | Residual U-Net     | Native         | No  |   **0.8840** |         **99** |
+| 2             | Residual U-Net     | 1 mm isotropic | No  |       0.8748 |             99 |
+| 3             | Conventional U-Net | Native         | No  |       0.8493 |             99 |
+| 4             | Residual U-Net     | Native         | Yes |       0.8777 |            100 |
 
 ## Main findings
 
 ### 1. Residual architecture had the largest effect
 
-The residual U-Net improved mean foreground Dice from **0.8493 to 0.8804**, an absolute improvement of **0.0311**.
+The conventional U-Net achieved a mean foreground Dice of 0.8493.
 
-### 2. Native spacing performed slightly better
+Adding residual units increased this to 0.8840:
 
-The native-spacing residual U-Net achieved **0.8804**, compared with **0.8748** after resampling to 1 mm isotropic spacing.
+$$
+0.8840 - 0.8493 = 0.0347
+$$
 
-### 3. N4 correction did not improve the final segmentation score
+This is an absolute improvement of **0.0347 Dice points**.
 
-The N4 configuration achieved **0.8777**, compared with **0.8804** for the native-spacing baseline.
+The largest class-specific improvement was observed for CSF.
 
-Although N4 did not improve the score, the preprocessing itself was validated successfully across all 18 subjects.
+### 2. Native spacing performed better than 1 mm isotropic resampling
 
-## Selected configuration
+The native residual U-Net achieved:
 
-Based on the controlled experiments, the current best-performing configuration is:
+$$
+0.8840
+$$
+
+compared with:
+
+$$
+0.8748
+$$
+
+after resampling to 1 mm isotropic spacing.
+
+The native configuration therefore performed **0.0092 Dice points better**.
+
+### 3. N4 correction did not improve segmentation
+
+The N4 configuration achieved:
+
+$$
+0.8777
+$$
+
+compared with:
+
+$$
+0.8840
+$$
+
+for the final native/no-N4 model.
+
+N4 therefore reduced mean foreground Dice by **0.0063**.
+
+Although N4 did not improve segmentation, the preprocessing implementation itself was independently validated on all 18 subjects.
+
+---
+
+# Final Model Selection
+
+The selected configuration is:
 
 * **Residual 3D U-Net**
 * **2 residual units**
 * **Native voxel spacing**
 * **No N4 preprocessing**
-* **Mean foreground Dice: 0.8804**
+* **100 training epochs**
+* **Selected checkpoint: epoch 99**
+* **Mean foreground validation Dice: 0.8840**
 
-This configuration is used as the primary model for subsequent final evaluation and qualitative visualization.
+The selection is based on validation performance across the controlled experiments.
+
+The final checkpoint is stored at:
+
+```text
+outputs/checkpoints/best_model.pt
+```
+
+---
+
+# Final Validation Assessment
+
+The final model achieved:
+
+| Tissue              |       Dice |
+| ------------------- | ---------: |
+| CSF                 |     0.8437 |
+| GM                  |     0.9055 |
+| WM                  |     0.9028 |
+| **Mean foreground** | **0.8840** |
+
+The model performs particularly strongly on GM and WM. CSF remains the most challenging foreground class, reflecting the difficulty of delineating smaller ventricular and thin sulcal CSF structures.
+
+---
+
+# Test-Set Inference
+
+After selecting the final checkpoint, inference was performed on the three unseen test subjects:
+
+* IBSR_02
+* IBSR_10
+* IBSR_15
+
+Inference used:
+
+* ROI size: `96 × 96 × 96`
+* sliding-window batch size: 1
+* overlap: 0.25
+* Gaussian blending
+* final native-space reconstruction
+
+The test predictions were restored from the cropped inference representation to the original native NIfTI geometry.
+
+## Native-space sanity checks
+
+All three subjects passed:
+
+* spatial-shape matching
+* affine matching
+* finite-value validation
+* label-range validation
+* non-empty foreground validation
+* `uint8` output validation
+
+Therefore, the generated test predictions are structurally valid native-space NIfTI segmentations.
+
+Because ground-truth segmentations are unavailable for the test subjects, no quantitative test Dice is reported.
+
+---
+
+# Qualitative Test Assessment
+
+Qualitative inspection was performed in axial, coronal, and sagittal planes.
+
+## IBSR_02
+
+The overall segmentation is anatomically plausible, with continuous cortical coverage and recognizable GM/WM organization.
+
+A disconnected inferior WM prediction was observed in the coronal view. This is considered a likely false-positive region rather than a coherent anatomical component.
+
+## IBSR_10
+
+IBSR_10 produced the strongest qualitative prediction among the three unseen subjects.
+
+Observed strengths include:
+
+* continuous cortical coverage
+* detailed GM/WM organization
+* well-formed ventricular CSF
+* good agreement between predicted structures and MRI appearance
+* no obvious disconnected islands in the inspected views
+
+## IBSR_15
+
+IBSR_15 was the most challenging qualitative case.
+
+Observed limitations include:
+
+* coarser WM regions
+* apparent WM over-segmentation
+* under-segmented ventricular CSF
+* localized cortical coverage loss
+* small off-brain prediction islands
+
+These findings demonstrate that good aggregate validation performance does not guarantee uniformly strong generalization across unseen subjects.
+
+No obvious rectangular or grid-aligned seams characteristic of sliding-window inference were observed.
+
+Localized off-brain predictions were observed, but their exact cause cannot be established from qualitative inspection alone.
+
+---
+
+# Interpretation
+
+The experiments support three conclusions.
+
+First, **architecture had the strongest measured effect** among the evaluated factors. Residual connections improved mean foreground Dice substantially compared with the conventional U-Net.
+
+Second, **native voxel spacing was preferable to 1 mm isotropic resampling** for this dataset and model configuration. Resampling did not provide an accuracy benefit.
+
+Third, **N4 bias-field correction was technically successful but did not improve segmentation performance**. This is an important distinction: a preprocessing method can be implemented correctly without necessarily improving the downstream task.
+
+The final pipeline therefore favors the simpler native/no-N4 configuration.
+
+---
+
+# Limitations
+
+The experimental conclusions should be interpreted within the limitations of the dataset and evaluation setup:
+
+1. IBSR-18 contains a relatively small number of subjects.
+2. The test split used here has no available ground-truth labels in this project configuration.
+3. The validation set is therefore the primary quantitative evaluation set.
+4. Qualitative test inspection revealed subject-dependent errors.
+5. CSF remains more difficult to segment than GM and WM.
+6. Some isolated false-positive predictions occur in difficult cases.
+7. The results should not be assumed to generalize directly to other MRI scanners, acquisition protocols, or clinical populations.
+
+---
+
+# Final Conclusion
+
+The final selected pipeline is a native-resolution residual 3D U-Net without N4 preprocessing.
+
+It achieved a **0.8840 mean foreground Dice** on the held-out validation set, with class-specific Dice scores of:
+
+* CSF: **0.8437**
+* GM: **0.9055**
+* WM: **0.9028**
+
+The controlled experiments demonstrate that residual architecture improved performance substantially, whereas 1 mm isotropic resampling and N4 bias-field correction did not improve the final validation result.
+
+The completed workflow additionally validates unseen test predictions through native-space reconstruction, automated structural sanity checks, and qualitative inspection.
+
+The resulting project therefore provides both a reproducible **medical image segmentation experiment** and a modular **research software engineering implementation**.

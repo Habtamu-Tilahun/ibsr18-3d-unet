@@ -5,15 +5,18 @@ This script:
 1. Loads the selected Experiment 1 checkpoint.
 2. Runs inference on the validation subjects.
 3. Uses the established sliding-window inference configuration.
-4. Saves predicted segmentations as NIfTI files.
-5. Generates axial, coronal, and sagittal qualitative comparisons.
+4. Inverts the validation spatial preprocessing so predictions are
+   restored to the original native NIfTI geometry.
+5. Saves predicted segmentations as NIfTI files.
+6. Generates axial, coronal, and sagittal qualitative comparisons.
 
 Selected model:
     Experiment 1
     Residual 3D U-Net
     Native spacing
     No N4 preprocessing
-    Best validation mean foreground Dice: 0.8804
+    Best validation mean foreground Dice: 0.8840
+    Best epoch: 99
 
 Expected output:
 
@@ -40,7 +43,6 @@ outputs/
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -48,26 +50,24 @@ import nibabel as nib
 import numpy as np
 import torch
 import yaml
-
-
-# ---------------------------------------------------------------------
-# Project paths
-# ---------------------------------------------------------------------
-
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-SRC_DIR = PROJECT_ROOT / "src"
-
-if str(SRC_DIR) not in sys.path:
-    sys.path.insert(0, str(SRC_DIR))
-
+from monai.transforms import Invertd
 
 from ibsr_unet.data.datamodule import IBSRDataModule
 from ibsr_unet.inference.predictor import sliding_window_predict
 from ibsr_unet.models.unet import build_unet
 from ibsr_unet.visualization.plots import plot_prediction_comparison
 
+# ---------------------------------------------------------------------
+# Project paths
+# ---------------------------------------------------------------------
 
-CONFIG_PATH = PROJECT_ROOT / "configs" / "train.yaml"
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+CONFIG_PATH = (
+    PROJECT_ROOT
+    / "configs"
+    / "train.yaml"
+)
 
 CHECKPOINT_PATH = (
     PROJECT_ROOT
@@ -93,6 +93,7 @@ VISUALIZATION_DIR = (
 # Expected selected experiment
 # ---------------------------------------------------------------------
 
+EXPECTED_EXPERIMENT = 1
 EXPECTED_BEST_DICE = 0.8840
 EXPECTED_BEST_EPOCH = 99
 
@@ -153,8 +154,15 @@ def build_datamodule(
     # Resolve data paths.
     # -------------------------------------------------------------
 
-    data_dir = PROJECT_ROOT / data_config["root_dir"]
-    splits_dir = PROJECT_ROOT / data_config["splits_dir"]
+    data_dir = (
+        PROJECT_ROOT
+        / data_config["root_dir"]
+    )
+
+    splits_dir = (
+        PROJECT_ROOT
+        / data_config["splits_dir"]
+    )
 
     # -------------------------------------------------------------
     # Native spacing.
@@ -162,7 +170,9 @@ def build_datamodule(
     # Experiment 1 does not resample the images.
     # -------------------------------------------------------------
 
-    spacing_config = data_config.get("spacing")
+    spacing_config = data_config.get(
+        "spacing"
+    )
 
     if spacing_config is None:
         target_spacing = None
@@ -226,6 +236,9 @@ def build_datamodule(
         patch_size=patch_size,
         num_samples=num_samples,
         target_spacing=target_spacing,
+        use_n4_bias_correction=False,
+        n4_dir=None,
+        use_precomputed_n4=False,
         batch_size=batch_size,
         num_workers=num_workers,
         pin_memory=pin_memory,
@@ -295,6 +308,11 @@ def load_checkpoint(
         weights_only=False,
     )
 
+    if not isinstance(checkpoint, dict):
+        raise ValueError(
+            "Expected checkpoint to contain a dictionary."
+        )
+
     if "model_state_dict" not in checkpoint:
         raise KeyError(
             "Checkpoint does not contain 'model_state_dict'."
@@ -308,31 +326,240 @@ def load_checkpoint(
 
 
 # ---------------------------------------------------------------------
-# Subject ID
+# Subject information
 # ---------------------------------------------------------------------
 
 
-def get_subject_id(
-    batch: dict[str, Any],
-) -> str:
+def get_subject_info_from_dataset(
+    dataset: Any,
+    index: int,
+) -> tuple[str, Path]:
     """
-    Extract the IBSR subject ID from a DataLoader batch.
+    Retrieve the subject ID and reference MRI path from the original
+    MONAI dataset item.
 
-    Depending on DataLoader collation, subject_id may be returned
-    as a string, list, or tuple.
+    The validation DataLoader does not include a `subject_id` field in
+    its batches. The underlying MONAI Dataset retains the original
+    sample dictionaries in `dataset.data`.
+
+    Returns
+    -------
+    tuple[str, Path]
+        Subject ID and original reference MRI path.
     """
 
-    subject_id = batch["subject_id"]
+    if not hasattr(dataset, "data"):
+        raise AttributeError(
+            "Validation dataset does not expose the expected "
+            "`data` attribute."
+        )
 
-    if isinstance(subject_id, (list, tuple)):
-        if not subject_id:
+    dataset_data = dataset.data
+
+    if not isinstance(
+        dataset_data,
+        (list, tuple),
+    ):
+        raise TypeError(
+            "Expected validation dataset.data to be a list or tuple."
+        )
+
+    if index < 0 or index >= len(dataset_data):
+        raise IndexError(
+            f"Dataset index {index} is out of range."
+        )
+
+    data_item = dataset_data[index]
+
+    if not isinstance(
+        data_item,
+        dict,
+    ):
+        raise TypeError(
+            "Expected each validation dataset item to be a dictionary, "
+            f"but received {type(data_item).__name__}."
+        )
+
+    image_path = data_item.get(
+        "image"
+    )
+
+    if image_path is None:
+        raise KeyError(
+            "Validation dataset item does not contain an 'image' path."
+        )
+
+    if isinstance(
+        image_path,
+        (list, tuple),
+    ):
+        if len(image_path) != 1:
             raise ValueError(
-                "Batch contains an empty subject_id."
+                "Expected exactly one image path for a validation sample, "
+                f"but found {len(image_path)}."
             )
 
-        return str(subject_id[0])
+        image_path = image_path[0]
 
-    return str(subject_id)
+    image_path = Path(
+        str(image_path)
+    )
+
+    if not image_path.exists():
+        raise FileNotFoundError(
+            "Reference MRI from dataset item does not exist: "
+            f"{image_path}"
+        )
+
+    subject_id = image_path.parent.name
+
+    if not subject_id.startswith(
+        "IBSR_"
+    ):
+        raise ValueError(
+            "Could not determine a valid IBSR subject ID from image path: "
+            f"{image_path}"
+        )
+
+    return (
+        subject_id,
+        image_path,
+    )
+
+
+# ---------------------------------------------------------------------
+# Prediction inversion
+# ---------------------------------------------------------------------
+
+
+def invert_prediction_to_native_space(
+    prediction: torch.Tensor,
+    batch: dict[str, Any],
+    validation_transforms: Any,
+) -> torch.Tensor:
+    """
+    Invert the validation spatial preprocessing applied to the MRI.
+
+    The validation pipeline contains CropForegroundd, which changes
+    the spatial dimensions before inference. MONAI records the spatial
+    operations in the image MetaTensor metadata.
+
+    This function uses MONAI Invertd to restore the prediction to the
+    original native NIfTI geometry.
+
+    Parameters
+    ----------
+    prediction:
+        Predicted class labels with shape:
+
+            [B, X, Y, Z]
+
+        for the current batch.
+
+    batch:
+        Validation batch containing the transformed image and its
+        MONAI metadata.
+
+    validation_transforms:
+        The exact Compose transform used by the validation dataset.
+
+    Returns
+    -------
+    torch.Tensor
+        Prediction restored to native spatial dimensions with shape:
+
+            [B, X, Y, Z]
+    """
+
+    if prediction.ndim != 4:
+        raise ValueError(
+            "Expected prediction to have shape [B,X,Y,Z], "
+            f"but received {tuple(prediction.shape)}."
+        )
+
+    # -------------------------------------------------------------
+    # Attach the prediction to the transformed batch.
+    #
+    # Invertd uses the transform history recorded on the original
+    # image (`orig_keys="image"`) to undo the spatial operations.
+    # -------------------------------------------------------------
+
+    inversion_batch = dict(batch)
+
+    inversion_batch["prediction"] = (
+        prediction.to(
+            dtype=torch.float32
+        )
+    )
+
+    # -------------------------------------------------------------
+    # Invert the validation transforms.
+    #
+    # nearest_interp=True is essential because this is a discrete
+    # segmentation map.
+    # -------------------------------------------------------------
+
+    inverter = Invertd(
+        keys="prediction",
+        transform=validation_transforms,
+        orig_keys="image",
+        nearest_interp=True,
+        to_tensor=True,
+    )
+
+    inversion_batch = inverter(
+        inversion_batch
+    )
+
+    restored_prediction = (
+        inversion_batch["prediction"]
+    )
+
+    if isinstance(
+        restored_prediction,
+        torch.Tensor,
+    ):
+        restored_prediction = (
+            restored_prediction
+            .detach()
+            .cpu()
+        )
+    else:
+        restored_prediction = torch.as_tensor(
+            restored_prediction
+        )
+
+    # -------------------------------------------------------------
+    # Invertd normally returns [B,1,X,Y,Z] when operating with
+    # channel-first metadata. Remove the singleton channel.
+    # -------------------------------------------------------------
+
+    if (
+        restored_prediction.ndim == 5
+        and restored_prediction.shape[1] == 1
+    ):
+        restored_prediction = (
+            restored_prediction[:, 0]
+        )
+
+    if restored_prediction.ndim != 4:
+        raise ValueError(
+            "Unexpected inverted prediction shape: "
+            f"{tuple(restored_prediction.shape)}"
+        )
+
+    # -------------------------------------------------------------
+    # Convert back to discrete class labels.
+    # -------------------------------------------------------------
+
+    restored_prediction = (
+        torch.round(
+            restored_prediction
+        )
+        .to(dtype=torch.uint8)
+    )
+
+    return restored_prediction
 
 
 # ---------------------------------------------------------------------
@@ -356,6 +583,17 @@ def save_prediction_nifti(
         1 = CSF
         2 = GM
         3 = WM
+    IBSR raw images may have a trailing singleton dimension:
+
+        (X, Y, Z, 1)
+
+    whereas the predicted segmentation is naturally:
+
+        (X, Y, Z)
+
+    The singleton dimension is therefore ignored when validating the
+    spatial geometry.
+    
     """
 
     if not reference_path.exists():
@@ -373,16 +611,47 @@ def save_prediction_nifti(
     )
 
     # -------------------------------------------------------------
-    # Verify geometry before saving.
+    # Normalize reference geometry.
+    #
+    # Raw IBSR files can be:
+    #
+    #     (X, Y, Z, 1)
+    #
+    # while the segmentation is:
+    #
+    #     (X, Y, Z)
+    #
+    # The trailing singleton dimension is not spatial.
     # -------------------------------------------------------------
 
     reference_shape = reference.shape
 
-    if prediction.shape != reference_shape:
+    if (
+        len(reference_shape) == 4
+        and reference_shape[-1] == 1
+    ):
+        reference_spatial_shape = (
+            reference_shape[:3]
+        )
+    elif len(reference_shape) == 3:
+        reference_spatial_shape = reference_shape
+    else:
         raise ValueError(
-            "Prediction/reference shape mismatch: "
+            "Unexpected reference MRI shape: "
+            f"{reference_shape}. "
+            "Expected (X,Y,Z) or (X,Y,Z,1)."
+        )
+
+    # -------------------------------------------------------------
+    # Verify spatial geometry.
+    # -------------------------------------------------------------
+
+    if prediction.shape != reference_spatial_shape:
+        raise ValueError(
+            "Prediction/reference spatial shape mismatch: "
             f"prediction={prediction.shape}, "
-            f"reference={reference_shape}"
+            f"reference_spatial={reference_spatial_shape}, "
+            f"reference_raw={reference_shape}"
         )
 
     # -------------------------------------------------------------
@@ -390,13 +659,27 @@ def save_prediction_nifti(
     # -------------------------------------------------------------
 
     header = reference.header.copy()
-    header.set_data_dtype(np.uint8)
+
+    header.set_data_dtype(
+        np.uint8
+    )
+
+
+    # Ensure the header describes the 3D prediction rather than the
+    # raw image's trailing singleton dimension.
+    header.set_data_shape(
+        prediction.shape
+    )
 
     prediction_image = nib.Nifti1Image(
         prediction,
         affine=reference.affine,
         header=header,
     )
+
+    # -------------------------------------------------------------
+    # Save.
+    # -------------------------------------------------------------
 
     output_path.parent.mkdir(
         parents=True,
@@ -421,14 +704,19 @@ def tensor_to_numpy(
     Convert a tensor-like value to a NumPy array.
     """
 
-    if isinstance(value, torch.Tensor):
+    if isinstance(
+        value,
+        torch.Tensor,
+    ):
         return (
             value.detach()
             .cpu()
             .numpy()
         )
 
-    return np.asarray(value)
+    return np.asarray(
+        value
+    )
 
 
 def remove_singleton_channel(
@@ -461,10 +749,11 @@ def generate_visualizations(
     roi_size: tuple[int, int, int],
     sw_batch_size: int,
     overlap: float,
+    validation_transforms: Any,
 ) -> None:
     """
-    Run inference on the validation set, save NIfTI predictions,
-    and generate qualitative visualizations.
+    Run inference on the validation set, restore predictions to native
+    space, save NIfTI predictions, and generate qualitative figures.
     """
 
     prediction_dir.mkdir(
@@ -479,40 +768,71 @@ def generate_visualizations(
 
     model.eval()
 
+    dataset = dataloader.dataset
+
+    if not hasattr(
+        dataset,
+        "data",
+    ):
+        raise AttributeError(
+            "Validation DataLoader dataset does not expose `.data`. "
+            "Cannot determine subject IDs and reference image paths."
+        )
+
     print()
-    print("Generating qualitative results...")
-    print("-" * 70)
+    print(
+        "Generating qualitative results..."
+    )
+    print(
+        "-" * 70
+    )
 
     print(
         "Inference configuration:"
     )
     print(
-        f"  ROI size:       {roi_size}"
+        f"  ROI size:         {roi_size}"
     )
     print(
-        f"  SW batch size:  {sw_batch_size}"
+        f"  SW batch size:    {sw_batch_size}"
     )
     print(
-        f"  Overlap:        {overlap}"
+        f"  Overlap:          {overlap}"
     )
     print(
-        "  Target spacing: native"
+        "  Target spacing:   native"
     )
     print(
         "  N4 preprocessing: disabled"
     )
+    print(
+        "  Spatial inversion: enabled"
+    )
 
-    print("-" * 70)
+    print(
+        "-" * 70
+    )
 
     with torch.no_grad():
 
-        for batch in dataloader:
+        for index, batch in enumerate(
+            dataloader
+        ):
 
             # -----------------------------------------------------
-            # Subject ID.
+            # Subject ID and original reference MRI.
             # -----------------------------------------------------
 
-            subject_id = get_subject_id(batch)
+            subject_id, reference_path = (
+                get_subject_info_from_dataset(
+                    dataset=dataset,
+                    index=index,
+                )
+            )
+
+            print(
+                f"Processing {subject_id}..."
+            )
 
             # -----------------------------------------------------
             # Move image to device.
@@ -525,6 +845,9 @@ def generate_visualizations(
 
             # -----------------------------------------------------
             # Ground truth.
+            #
+            # This is still in transformed/cropped validation space,
+            # which is exactly the space used for inference.
             # -----------------------------------------------------
 
             label_np = remove_singleton_channel(
@@ -534,7 +857,10 @@ def generate_visualizations(
             )
 
             # -----------------------------------------------------
-            # MRI volume.
+            # Transformed MRI volume.
+            #
+            # Used for the qualitative visualization. This is the
+            # same preprocessed volume seen by the model.
             # -----------------------------------------------------
 
             image_np = (
@@ -565,12 +891,50 @@ def generate_visualizations(
                 dim=1,
             )
 
-            prediction_np = (
-                prediction_labels[0]
+            # prediction_labels:
+            #     [B, X, Y, Z]
+            #
+            # At this point the prediction is still in cropped
+            # validation space.
+            # -----------------------------------------------------
+
+            transformed_prediction = (
+                prediction_labels
                 .detach()
                 .cpu()
+            )
+
+            print(
+                "  Transformed prediction shape: "
+                f"{tuple(transformed_prediction.shape)}"
+            )
+
+            # -----------------------------------------------------
+            # Restore prediction to native image space.
+            # -----------------------------------------------------
+
+            native_prediction = (
+                invert_prediction_to_native_space(
+                    prediction=transformed_prediction,
+                    batch=batch,
+                    validation_transforms=validation_transforms,
+                )
+            )
+
+            prediction_np = (
+                native_prediction[0]
                 .numpy()
                 .astype(np.uint8)
+            )
+
+            print(
+                "  Native prediction shape:      "
+                f"{prediction_np.shape}"
+            )
+
+            print(
+                "  Reference MRI shape:          "
+                f"{nib.load(str(reference_path)).shape}"
             )
 
             # -----------------------------------------------------
@@ -592,23 +956,13 @@ def generate_visualizations(
                     f"{unique_labels}"
                 )
 
-            # -----------------------------------------------------
-            # Locate reference MRI.
-            #
-            # The data module returns the subject ID and the
-            # dataset uses the standard IBSR directory structure.
-            # -----------------------------------------------------
-
-            reference_path = (
-                PROJECT_ROOT
-                / "data"
-                / "raw"
-                / subject_id
-                / f"{subject_id}.nii.gz"
+            print(
+                "  Prediction labels: "
+                f"{unique_labels.tolist()}"
             )
 
             # -----------------------------------------------------
-            # Save predicted segmentation.
+            # Save native-space prediction.
             # -----------------------------------------------------
 
             subject_prediction_dir = (
@@ -628,12 +982,25 @@ def generate_visualizations(
             )
 
             print(
-                f"Saved prediction: {prediction_path}"
+                f"  Saved prediction: "
+                f"{prediction_path}"
             )
 
             # -----------------------------------------------------
             # Generate qualitative figure.
+            #
+            # The plotting function expects image, label, and
+            # prediction to have matching spatial dimensions.
+            #
+            # Therefore, for qualitative visualization we use the
+            # transformed validation-space image/label/prediction.
             # -----------------------------------------------------
+
+            transformed_prediction_np = (
+                transformed_prediction[0]
+                .numpy()
+                .astype(np.uint8)
+            )
 
             visualization_path = (
                 visualization_dir
@@ -643,20 +1010,33 @@ def generate_visualizations(
             plot_prediction_comparison(
                 image=image_np,
                 label=label_np,
-                prediction=prediction_np,
+                prediction=transformed_prediction_np,
                 subject_id=subject_id,
                 output_path=visualization_path,
             )
 
             print(
-                f"Saved visualization: "
+                f"  Saved visualization: "
                 f"{visualization_path}"
             )
 
             print()
 
-    print("-" * 70)
-    print("Qualitative evaluation complete.")
+    print(
+        "-" * 70
+    )
+
+    print(
+        "Qualitative evaluation complete."
+    )
+
+    print()
+    print(
+        f"Predictions:     {prediction_dir}"
+    )
+    print(
+        f"Visualizations:  {visualization_dir}"
+    )
 
 
 # ---------------------------------------------------------------------
@@ -706,6 +1086,45 @@ def main() -> None:
     )
 
     # -------------------------------------------------------------
+    # Get the exact validation transform used by the dataset.
+    #
+    # This must be the same transform object that generated the
+    # metadata used for inversion.
+    # -------------------------------------------------------------
+
+    if data_module.val_dataset is None:
+        raise RuntimeError(
+            "Validation dataset was not initialized."
+        )
+
+    validation_transforms = (
+        data_module.val_dataset.transform
+    )
+
+    if validation_transforms is None:
+        raise RuntimeError(
+            "Validation dataset does not have a transform. "
+            "Cannot invert spatial preprocessing."
+        )
+
+    # -------------------------------------------------------------
+    # Verify validation dataset.
+    # -------------------------------------------------------------
+
+    if len(
+        data_module.val_dataset.data
+    ) == 0:
+        raise RuntimeError(
+            "Validation dataset is empty."
+        )
+
+    print()
+    print(
+        "Validation subjects: "
+        f"{len(data_module.val_dataset.data)}"
+    )
+
+    # -------------------------------------------------------------
     # Build model.
     # -------------------------------------------------------------
 
@@ -747,11 +1166,11 @@ def main() -> None:
     if checkpoint_dice is not None:
         print(
             "Checkpoint validation mean Dice: "
-            f"{checkpoint_dice:.4f}"
+            f"{float(checkpoint_dice):.4f}"
         )
 
     # -------------------------------------------------------------
-    # Verify that the selected checkpoint is the expected model.
+    # Verify selected checkpoint.
     #
     # Do not silently visualize a different checkpoint.
     # -------------------------------------------------------------
@@ -763,34 +1182,43 @@ def main() -> None:
             f"but found epoch {checkpoint_epoch}."
         )
 
-    if checkpoint_dice is not None:
-        if not np.isclose(
-            float(checkpoint_dice),
-            EXPECTED_BEST_DICE,
-            atol=1e-4,
-        ):
-            raise RuntimeError(
-                "Checkpoint validation Dice does not match the "
-                "selected Experiment 1 model. "
-                f"Expected {EXPECTED_BEST_DICE:.4f}, "
-                f"found {float(checkpoint_dice):.4f}."
-            )
+    if checkpoint_dice is None:
+        raise RuntimeError(
+            "Checkpoint does not contain 'val_mean_dice'. "
+            "Cannot verify that this is the selected checkpoint."
+        )
 
+    if not np.isclose(
+        float(checkpoint_dice),
+        EXPECTED_BEST_DICE,
+        atol=1e-4,
+    ):
+        raise RuntimeError(
+            "Checkpoint validation Dice does not match the "
+            "selected Experiment 1 model. "
+            f"Expected {EXPECTED_BEST_DICE:.4f}, "
+            f"found {float(checkpoint_dice):.4f}."
+        )
+
+    print()
     print(
         "Selected model verified:"
     )
     print(
-        f"  Experiment:       1"
+        f"  Experiment:          {EXPECTED_EXPERIMENT}"
     )
     print(
-        f"  Best epoch:       {EXPECTED_BEST_EPOCH}"
+        "  Architecture:        Residual 3D U-Net"
     )
     print(
-        f"  Mean foreground Dice: "
+        f"  Best epoch:          {EXPECTED_BEST_EPOCH}"
+    )
+    print(
+        "  Mean foreground Dice: "
         f"{EXPECTED_BEST_DICE:.4f}"
     )
     print(
-        "  Preprocessing:    native spacing, no N4"
+        "  Preprocessing:       native spacing, no N4"
     )
 
     # -------------------------------------------------------------
@@ -840,6 +1268,7 @@ def main() -> None:
         roi_size=roi_size,
         sw_batch_size=sw_batch_size,
         overlap=overlap,
+        validation_transforms=validation_transforms,
     )
 
 
