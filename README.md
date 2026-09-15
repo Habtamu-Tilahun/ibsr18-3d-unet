@@ -122,17 +122,9 @@ The test subjects do not contain ground-truth segmentations in this project conf
 
 The primary evaluation metric is **mean foreground Dice**, calculated across CSF, GM, and WM:
 
-$$
-\mathrm{Mean\ Foreground\ Dice}
-=
-\frac{
-\mathrm{Dice}_{CSF}
-+
-\mathrm{Dice}_{GM}
-+
-\mathrm{Dice}_{WM}
-}{3}
-$$
+```math
+\frac{\mathrm{Dice}_{CSF} + \mathrm{Dice}_{GM} + \mathrm{Dice}_{WM}}{3}
+```
 
 ---
 

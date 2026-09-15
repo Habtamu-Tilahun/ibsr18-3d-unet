@@ -44,9 +44,7 @@ The test subjects are subsequently used for unseen-subject inference and qualita
 |     2 | Gray matter (GM)  |
 |     3 | White matter (WM) |
 
-The primary metric is the mean Dice score across the three foreground tissue classes.
-
-**Mean Foreground Dice** = average Dice score across CSF, GM, and WM:
+The primary metric is the **Mean Foreground Dice**, defined as the average Dice score across CSF, GM, and WM:
 
 ```math
 \frac{\mathrm{Dice}_{CSF} + \mathrm{Dice}_{GM} + \mathrm{Dice}_{WM}}{3}
