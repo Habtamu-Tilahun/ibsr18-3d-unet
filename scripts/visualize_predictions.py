@@ -94,8 +94,8 @@ VISUALIZATION_DIR = (
 # ---------------------------------------------------------------------
 
 EXPECTED_EXPERIMENT = 1
-EXPECTED_BEST_DICE = 0.8840
-EXPECTED_BEST_EPOCH = 99
+EXPECTED_BEST_DICE = 0.9185
+EXPECTED_BEST_EPOCH = 391
 
 
 # ---------------------------------------------------------------------
