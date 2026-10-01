@@ -76,7 +76,7 @@ data/raw/
 # Processed dataset
 data/processed/
 
-# Keep documentation
+# Keep dataset documentation and split definitions
 !data/README.md
 !data/splits/
 !data/splits/*

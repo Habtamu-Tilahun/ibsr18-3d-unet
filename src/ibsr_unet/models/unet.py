@@ -15,7 +15,7 @@ verified against the IBSR-18 dataset documentation.
 
 from __future__ import annotations
 
-from typing import Sequence
+from collections.abc import Sequence
 
 from monai.networks.nets import UNet
 from torch import nn

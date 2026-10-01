@@ -4,6 +4,7 @@ Evaluate a trained IBSR-18 3D U-Net.
 This script:
     - loads the best model checkpoint
     - runs sliding-window inference on the validation set
+    - optionally applies left-right flip test-time augmentation (TTA)
     - computes Dice for each segmentation class
     - reports per-subject Dice scores using actual IBSR subject IDs
     - reports mean Dice for each class
@@ -30,9 +31,11 @@ import yaml
 
 from ibsr_unet.data.datamodule import IBSRDataModule
 from ibsr_unet.evaluation.metrics import dice_per_class
-from ibsr_unet.inference import sliding_window_predict
+from ibsr_unet.inference import (
+    left_right_flip_tta,
+    sliding_window_predict,
+)
 from ibsr_unet.models.unet import build_unet
-
 
 # ---------------------------------------------------------------------
 # IBSR-18 segmentation class names.
@@ -55,9 +58,7 @@ CLASS_NAMES = {
 def parse_args() -> argparse.Namespace:
     """Parse command-line arguments."""
 
-    parser = argparse.ArgumentParser(
-        description="Evaluate a trained IBSR-18 3D U-Net."
-    )
+    parser = argparse.ArgumentParser(description="Evaluate a trained IBSR-18 3D U-Net.")
 
     parser.add_argument(
         "--config",
@@ -69,10 +70,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--checkpoint",
         type=Path,
-        default=Path(
-            "outputs/checkpoints/best_model.pt"
-        ),
+        default=Path("outputs/checkpoints/best_model.pt"),
         help="Path to the trained model checkpoint.",
+    )
+
+    parser.add_argument(
+        "--tta",
+        action="store_true",
+        help=(
+            "Enable left-right flip test-time augmentation "
+            "and average original/flipped logits."
+        ),
     )
 
     return parser.parse_args()
@@ -84,9 +92,7 @@ def load_config(
     """Load configuration from YAML."""
 
     if not config_path.exists():
-        raise FileNotFoundError(
-            f"Configuration file not found: {config_path}"
-        )
+        raise FileNotFoundError(f"Configuration file not found: {config_path}")
 
     with config_path.open(
         "r",
@@ -95,9 +101,7 @@ def load_config(
         config = yaml.safe_load(file)
 
     if not isinstance(config, dict):
-        raise ValueError(
-            "Configuration must contain a YAML mapping."
-        )
+        raise ValueError("Configuration must contain a YAML mapping.")
 
     return config
 
@@ -106,10 +110,7 @@ def get_device() -> torch.device:
     """Select CUDA when available."""
 
     if torch.cuda.is_available():
-        print(
-            f"Using GPU: "
-            f"{torch.cuda.get_device_name(0)}"
-        )
+        print(f"Using GPU: {torch.cuda.get_device_name(0)}")
         return torch.device("cuda")
 
     print("CUDA is not available. Using CPU.")
@@ -147,17 +148,14 @@ def get_subject_id(
 
         if isinstance(subject_id, (list, tuple)):
             if len(subject_id) == 0:
-                raise ValueError(
-                    "Batch contains an empty subject_id."
-                )
+                raise ValueError("Batch contains an empty subject_id.")
 
             subject_id = subject_id[0]
 
         if isinstance(subject_id, torch.Tensor):
             if subject_id.numel() != 1:
                 raise ValueError(
-                    "Expected subject_id tensor to contain "
-                    "exactly one value."
+                    "Expected subject_id tensor to contain exactly one value."
                 )
 
             subject_id = subject_id.item()
@@ -171,9 +169,7 @@ def get_subject_id(
         image = batch["image"]
 
         if hasattr(image, "meta"):
-            filename = image.meta.get(
-                "filename_or_obj"
-            )
+            filename = image.meta.get("filename_or_obj")
 
             if isinstance(filename, (list, tuple)):
                 if len(filename) == 0:
@@ -182,9 +178,7 @@ def get_subject_id(
                     filename = filename[0]
 
             if filename is not None:
-                filename_path = Path(
-                    str(filename)
-                )
+                filename_path = Path(str(filename))
 
                 # Expected structure:
                 #
@@ -222,18 +216,10 @@ def build_datamodule(
     spacing = data_config.get("spacing")
 
     target_spacing = (
-        tuple(
-            float(value)
-            for value in spacing
-        )
-        if spacing is not None
-        else None
+        tuple(float(value) for value in spacing) if spacing is not None else None
     )
 
-    patch_size = tuple(
-        int(value)
-        for value in data_config["patch_size"]
-    )
+    patch_size = tuple(int(value) for value in data_config["patch_size"])
 
     # -------------------------------------------------------------
     # N4 configuration.
@@ -259,29 +245,16 @@ def build_datamodule(
         )
     )
 
-    n4_dir_value = data_config.get(
-        "n4_dir"
-    )
+    n4_dir_value = data_config.get("n4_dir")
 
-    n4_dir = (
-        Path(n4_dir_value)
-        if n4_dir_value is not None
-        else None
-    )
+    n4_dir = Path(n4_dir_value) if n4_dir_value is not None else None
 
     if use_precomputed_n4 and n4_dir is None:
-        raise ValueError(
-            "data.n4_dir must be provided when "
-            "use_precomputed_n4=True."
-        )
+        raise ValueError("data.n4_dir must be provided when use_precomputed_n4=True.")
 
     return IBSRDataModule(
-        data_dir=Path(
-            data_config["root_dir"]
-        ),
-        splits_dir=Path(
-            data_config["splits_dir"]
-        ),
+        data_dir=Path(data_config["root_dir"]),
+        splits_dir=Path(data_config["splits_dir"]),
         patch_size=patch_size,
         num_samples=int(
             training_config.get(
@@ -290,13 +263,9 @@ def build_datamodule(
             )
         ),
         target_spacing=target_spacing,
-        use_n4_bias_correction=(
-            use_n4_bias_correction
-        ),
+        use_n4_bias_correction=(use_n4_bias_correction),
         n4_dir=n4_dir,
-        use_precomputed_n4=(
-            use_precomputed_n4
-        ),
+        use_precomputed_n4=(use_precomputed_n4),
         batch_size=1,
         num_workers=int(
             training_config.get(
@@ -321,17 +290,11 @@ def load_model(
     """Build the model and load the trained checkpoint."""
 
     if not checkpoint_path.exists():
-        raise FileNotFoundError(
-            f"Checkpoint not found: "
-            f"{checkpoint_path}"
-        )
+        raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
 
     model_config = config["model"]
 
-    channels = tuple(
-        int(value)
-        for value in model_config["channels"]
-    )
+    channels = tuple(int(value) for value in model_config["channels"])
 
     strides = tuple(
         int(value)
@@ -342,12 +305,8 @@ def load_model(
     )
 
     model = build_unet(
-        in_channels=int(
-            model_config["in_channels"]
-        ),
-        out_channels=int(
-            model_config["out_channels"]
-        ),
+        in_channels=int(model_config["in_channels"]),
+        out_channels=int(model_config["out_channels"]),
         channels=channels,
         strides=strides,
         num_res_units=int(
@@ -364,22 +323,14 @@ def load_model(
         weights_only=False,
     )
 
-    model.load_state_dict(
-        checkpoint["model_state_dict"]
-    )
+    model.load_state_dict(checkpoint["model_state_dict"])
 
     model.to(device)
     model.eval()
 
-    print(
-        f"Loaded checkpoint: "
-        f"{checkpoint_path}"
-    )
+    print(f"Loaded checkpoint: {checkpoint_path}")
 
-    print(
-        f"Checkpoint epoch: "
-        f"{checkpoint.get('epoch', 'unknown')}"
-    )
+    print(f"Checkpoint epoch: {checkpoint.get('epoch', 'unknown')}")
 
     return model
 
@@ -393,12 +344,44 @@ def evaluate(
     roi_size: tuple[int, int, int],
     sw_batch_size: int,
     overlap: float,
+    use_tta: bool = False,
 ) -> torch.Tensor:
     """
     Evaluate the model and return mean per-class Dice scores.
 
     Dice is computed independently for each validation subject and
     then averaged subject-wise.
+
+    When ``use_tta`` is enabled, the model is evaluated using
+    conservative left-right flip test-time augmentation. The
+    original and flipped-back raw logits are averaged before Dice
+    computation.
+
+    Parameters
+    ----------
+    model:
+        Trained segmentation model.
+
+    dataloader:
+        Validation DataLoader.
+
+    device:
+        Torch device used for inference.
+
+    num_classes:
+        Number of segmentation classes.
+
+    roi_size:
+        Sliding-window inference ROI.
+
+    sw_batch_size:
+        Number of sliding-window patches processed together.
+
+    overlap:
+        Sliding-window overlap.
+
+    use_tta:
+        Whether to enable left-right flip TTA.
 
     Returns
     -------
@@ -419,9 +402,7 @@ def evaluate(
         # -------------------------------------------------------------
         # Retrieve the actual IBSR subject identifier.
         # -------------------------------------------------------------
-        subject_id = get_subject_id(
-            batch
-        )
+        subject_id = get_subject_id(batch)
 
         images = batch["image"].to(
             device,
@@ -434,19 +415,41 @@ def evaluate(
         )
 
         # -------------------------------------------------------------
-        # Sliding-window inference.
+        # Inference.
         #
-        # The complete validation volume is divided into overlapping
-        # patches so that inference remains feasible on GPUs with
-        # limited VRAM.
+        # Standard evaluation:
+        #
+        #     one sliding-window prediction
+        #
+        # TTA evaluation:
+        #
+        #     original prediction
+        #              +
+        #     left-right flipped prediction
+        #              ↓
+        #     flip augmented prediction back
+        #              ↓
+        #     average raw logits
+        #
+        # dice_per_class() performs argmax internally, so raw logits
+        # are passed directly to the metric function.
         # -------------------------------------------------------------
-        predictions = sliding_window_predict(
-            model=model,
-            images=images,
-            roi_size=roi_size,
-            sw_batch_size=sw_batch_size,
-            overlap=overlap,
-        )
+        if use_tta:
+            predictions = left_right_flip_tta(
+                model=model,
+                images=images,
+                roi_size=roi_size,
+                sw_batch_size=sw_batch_size,
+                overlap=overlap,
+            )
+        else:
+            predictions = sliding_window_predict(
+                model=model,
+                images=images,
+                roi_size=roi_size,
+                sw_batch_size=sw_batch_size,
+                overlap=overlap,
+            )
 
         # -------------------------------------------------------------
         # Compute Dice independently for each class.
@@ -458,9 +461,7 @@ def evaluate(
             include_background=True,
         )
 
-        class_scores.append(
-            scores.cpu()
-        )
+        class_scores.append(scores.cpu())
 
         # -------------------------------------------------------------
         # Print per-subject results using the actual IBSR subject ID
@@ -468,36 +469,25 @@ def evaluate(
         # -------------------------------------------------------------
         formatted_scores = []
 
-        for class_index, score in enumerate(
-            scores
-        ):
+        for class_index, score in enumerate(scores):
             class_name = CLASS_NAMES.get(
                 class_index,
                 f"Class {class_index}",
             )
 
-            formatted_scores.append(
-                f"{class_name}={score.item():.4f}"
-            )
+            formatted_scores.append(f"{class_name}={score.item():.4f}")
 
-        print(
-            f"{subject_id}: "
-            + " | ".join(formatted_scores)
-        )
+        print(f"{subject_id}: " + " | ".join(formatted_scores))
 
     if not class_scores:
-        raise RuntimeError(
-            "Validation DataLoader produced no batches."
-        )
+        raise RuntimeError("Validation DataLoader produced no batches.")
 
     # Stack subject-level scores:
     #
     #     [num_subjects, num_classes]
     #
     # and average across subjects.
-    return torch.stack(
-        class_scores
-    ).mean(dim=0)
+    return torch.stack(class_scores).mean(dim=0)
 
 
 def main() -> None:
@@ -508,9 +498,7 @@ def main() -> None:
     # -------------------------------------------------------------
     # Configuration
     # -------------------------------------------------------------
-    config = load_config(
-        args.config
-    )
+    config = load_config(args.config)
 
     # -------------------------------------------------------------
     # Device
@@ -520,9 +508,7 @@ def main() -> None:
     # -------------------------------------------------------------
     # Data
     # -------------------------------------------------------------
-    datamodule = build_datamodule(
-        config
-    )
+    datamodule = build_datamodule(config)
 
     datamodule.setup()
 
@@ -533,25 +519,13 @@ def main() -> None:
     data_summary = datamodule.summary()
 
     print("\nEvaluation data configuration:")
-    print(
-        f"  Precomputed N4: "
-        f"{data_summary['use_precomputed_n4']}"
-    )
-    print(
-        f"  Runtime N4:     "
-        f"{data_summary['use_n4_bias_correction']}"
-    )
+    print(f"  Precomputed N4: {data_summary['use_precomputed_n4']}")
+    print(f"  Runtime N4:     {data_summary['use_n4_bias_correction']}")
 
     if data_summary["use_precomputed_n4"]:
-        print(
-            f"  N4 directory:   "
-            f"{data_summary['n4_dir']}"
-        )
+        print(f"  N4 directory:   {data_summary['n4_dir']}")
 
-    print(
-        f"  Target spacing: "
-        f"{data_summary['target_spacing']}"
-    )
+    print(f"  Target spacing: {data_summary['target_spacing']}")
 
     # -------------------------------------------------------------
     # Model
@@ -579,10 +553,7 @@ def main() -> None:
     )
 
     if len(roi_size) != 3:
-        raise ValueError(
-            "inference.roi_size must contain exactly "
-            "three values."
-        )
+        raise ValueError("inference.roi_size must contain exactly three values.")
 
     sw_batch_size = int(
         inference_config.get(
@@ -598,14 +569,25 @@ def main() -> None:
         )
     )
 
-    num_classes = int(
-        config["model"]["out_channels"]
-    )
+    num_classes = int(config["model"]["out_channels"])
+
+    # -------------------------------------------------------------
+    # Print inference configuration.
+    # -------------------------------------------------------------
+    print("\nInference configuration:")
+    print(f"  ROI size:        {roi_size}")
+    print(f"  SW batch size:   {sw_batch_size}")
+    print(f"  SW overlap:      {overlap:.2f}")
+    print(f"  TTA:             {'left-right flip' if args.tta else 'disabled'}")
 
     # -------------------------------------------------------------
     # Evaluation
     # -------------------------------------------------------------
-    print("\nRunning validation evaluation...")
+    if args.tta:
+        print("\nRunning validation evaluation with left-right flip TTA...")
+    else:
+        print("\nRunning validation evaluation...")
+
     print("-" * 60)
 
     mean_class_dice = evaluate(
@@ -616,27 +598,28 @@ def main() -> None:
         roi_size=roi_size,
         sw_batch_size=sw_batch_size,
         overlap=overlap,
+        use_tta=args.tta,
     )
 
     # -------------------------------------------------------------
     # Final results
     # -------------------------------------------------------------
     print("\n" + "=" * 60)
-    print("Validation Dice Results")
+
+    if args.tta:
+        print("Validation Dice Results — Left-Right Flip TTA")
+    else:
+        print("Validation Dice Results")
+
     print("=" * 60)
 
-    for class_index, score in enumerate(
-        mean_class_dice
-    ):
+    for class_index, score in enumerate(mean_class_dice):
         class_name = CLASS_NAMES.get(
             class_index,
             f"Class {class_index}",
         )
 
-        print(
-            f"{class_name:<10}: "
-            f"{score.item():.4f}"
-        )
+        print(f"{class_name:<10}: {score.item():.4f}")
 
     # -------------------------------------------------------------
     # Mean foreground Dice.
@@ -653,10 +636,7 @@ def main() -> None:
 
     print("-" * 60)
 
-    print(
-        f"Mean foreground Dice: "
-        f"{foreground_dice.item():.4f}"
-    )
+    print(f"Mean foreground Dice: {foreground_dice.item():.4f}")
 
     print("=" * 60)
 

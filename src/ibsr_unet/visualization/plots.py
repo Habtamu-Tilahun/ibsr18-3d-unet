@@ -17,7 +17,6 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
-
 CLASS_NAMES = {
     0: "Background",
     1: "CSF",

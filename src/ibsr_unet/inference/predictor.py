@@ -11,9 +11,8 @@ patches are then combined to reconstruct the full-volume prediction.
 
 from __future__ import annotations
 
-from typing import Sequence
+from collections.abc import Sequence
 
-import torch
 from monai.inferers import sliding_window_inference
 from torch import Tensor, nn
 
@@ -70,14 +69,10 @@ def sliding_window_predict(
         )
 
     if sw_batch_size < 1:
-        raise ValueError(
-            "sw_batch_size must be at least 1."
-        )
+        raise ValueError("sw_batch_size must be at least 1.")
 
     if not 0.0 <= overlap < 1.0:
-        raise ValueError(
-            "overlap must be in the range [0.0, 1.0)."
-        )
+        raise ValueError("overlap must be in the range [0.0, 1.0).")
 
     return sliding_window_inference(
         inputs=images,

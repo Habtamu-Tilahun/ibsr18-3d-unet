@@ -42,25 +42,11 @@ from ibsr_unet.inference import sliding_window_predict
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
-DEFAULT_CONFIG = (
-    PROJECT_ROOT
-    / "configs"
-    / "train.yaml"
-)
+DEFAULT_CONFIG = PROJECT_ROOT / "configs" / "train.yaml"
 
-DEFAULT_CHECKPOINT = (
-    PROJECT_ROOT
-    / "outputs"
-    / "checkpoints"
-    / "best_model.pt"
-)
+DEFAULT_CHECKPOINT = PROJECT_ROOT / "outputs" / "checkpoints" / "best_model.pt"
 
-OUTPUT_DIR = (
-    PROJECT_ROOT
-    / "outputs"
-    / "predictions"
-    / "test"
-)
+OUTPUT_DIR = PROJECT_ROOT / "outputs" / "predictions" / "test"
 
 
 # ---------------------------------------------------------------------
@@ -78,16 +64,10 @@ def get_device() -> torch.device:
     """Select CUDA when available."""
 
     if torch.cuda.is_available():
-        print(
-            f"Using GPU: "
-            f"{torch.cuda.get_device_name(0)}"
-        )
+        print(f"Using GPU: {torch.cuda.get_device_name(0)}")
         return torch.device("cuda")
 
-    print(
-        "CUDA is not available. "
-        "Using CPU."
-    )
+    print("CUDA is not available. Using CPU.")
 
     return torch.device("cpu")
 
@@ -105,8 +85,7 @@ def get_subject_info(
 
     if not hasattr(dataset, "data"):
         raise AttributeError(
-            "Test dataset does not expose the expected "
-            "'data' attribute."
+            "Test dataset does not expose the expected 'data' attribute."
         )
 
     data_item = dataset.data[index]
@@ -114,10 +93,7 @@ def get_subject_info(
     image_path = data_item.get("image")
 
     if image_path is None:
-        raise KeyError(
-            f"Test dataset item {index} "
-            "does not contain an image path."
-        )
+        raise KeyError(f"Test dataset item {index} does not contain an image path.")
 
     image_path = Path(str(image_path))
 
@@ -125,8 +101,7 @@ def get_subject_info(
 
     if not subject_id.startswith("IBSR_"):
         raise ValueError(
-            "Could not determine IBSR subject ID from "
-            f"image path: {image_path}"
+            f"Could not determine IBSR subject ID from image path: {image_path}"
         )
 
     return subject_id, image_path
@@ -153,15 +128,12 @@ def print_image_metadata(
     print("  Image metadata diagnostics:")
 
     if not hasattr(image, "meta"):
-        print(
-            "    Image does not expose MetaTensor metadata."
-        )
+        print("    Image does not expose MetaTensor metadata.")
         return
 
     meta = image.meta
 
     for key, value in meta.items():
-
         # Crop-related metadata is especially important.
         key_lower = str(key).lower()
 
@@ -173,32 +145,20 @@ def print_image_metadata(
             or "filename" in key_lower
             or "affine" in key_lower
         ):
-            print(
-                f"    {key}: {value}"
-            )
+            print(f"    {key}: {value}")
 
     # MONAI may keep transform history separately.
     if hasattr(image, "applied_operations"):
-
         operations = image.applied_operations
 
-        print(
-            f"    applied_operations count: "
-            f"{len(operations)}"
-        )
+        print(f"    applied_operations count: {len(operations)}")
 
-        for operation_index, operation in enumerate(
-            operations
-        ):
-
+        for operation_index, operation in enumerate(operations):
             if not isinstance(
                 operation,
                 dict,
             ):
-                print(
-                    f"    operation[{operation_index}]: "
-                    f"{operation}"
-                )
+                print(f"    operation[{operation_index}]: {operation}")
                 continue
 
             class_name = operation.get(
@@ -209,16 +169,11 @@ def print_image_metadata(
                 ),
             )
 
-            print(
-                f"    operation[{operation_index}] "
-                f"class: {class_name}"
-            )
+            print(f"    operation[{operation_index}] class: {class_name}")
 
             # CropForegroundd information is normally stored
             # somewhere inside the operation dictionary.
-            operation_text = repr(
-                operation
-            ).lower()
+            operation_text = repr(operation).lower()
 
             if (
                 "crop" in operation_text
@@ -226,16 +181,18 @@ def print_image_metadata(
                 or "roi" in operation_text
                 or "spatial" in operation_text
             ):
-                print(
-                    f"      details: {operation}"
-                )
+                print(f"      details: {operation}")
+
 
 def get_crop_coordinates_from_metadata(
     batch: dict[str, Any],
-) -> tuple[
-    tuple[int, int, int],
-    tuple[int, int, int],
-] | None:
+) -> (
+    tuple[
+        tuple[int, int, int],
+        tuple[int, int, int],
+    ]
+    | None
+):
     """
     Recover the exact CropForeground coordinates recorded by MONAI.
 
@@ -277,7 +234,6 @@ def get_crop_coordinates_from_metadata(
         return None
 
     for operation in image.applied_operations:
-
         if not isinstance(
             operation,
             dict,
@@ -299,18 +255,13 @@ def get_crop_coordinates_from_metadata(
         # Original spatial dimensions before CropForeground.
         # ---------------------------------------------------------
 
-        orig_size = operation.get(
-            "orig_size"
-        )
+        orig_size = operation.get("orig_size")
 
         if orig_size is None:
             return None
 
         try:
-            orig_size = tuple(
-                int(value)
-                for value in orig_size
-            )
+            orig_size = tuple(int(value) for value in orig_size)
         except (
             TypeError,
             ValueError,
@@ -324,9 +275,7 @@ def get_crop_coordinates_from_metadata(
         # Crop information is stored inside extra_info.
         # ---------------------------------------------------------
 
-        extra_info = operation.get(
-            "extra_info"
-        )
+        extra_info = operation.get("extra_info")
 
         if not isinstance(
             extra_info,
@@ -334,18 +283,13 @@ def get_crop_coordinates_from_metadata(
         ):
             return None
 
-        cropped = extra_info.get(
-            "cropped"
-        )
+        cropped = extra_info.get("cropped")
 
         if cropped is None:
             return None
 
         try:
-            cropped = tuple(
-                int(value)
-                for value in cropped
-            )
+            cropped = tuple(int(value) for value in cropped)
         except (
             TypeError,
             ValueError,
@@ -386,9 +330,11 @@ def get_crop_coordinates_from_metadata(
 
     return None
 
+
 # ---------------------------------------------------------------------
 # Native-space restoration
 # ---------------------------------------------------------------------
+
 
 def invert_prediction_to_native_space(
     prediction: torch.Tensor,
@@ -449,28 +395,20 @@ def invert_prediction_to_native_space(
         )
 
     if not reference_path.exists():
-        raise FileNotFoundError(
-            f"Reference MRI not found: "
-            f"{reference_path}"
-        )
+        raise FileNotFoundError(f"Reference MRI not found: {reference_path}")
 
     # -------------------------------------------------------------
     # Load native MRI.
     # -------------------------------------------------------------
 
-    reference = nib.load(
-        str(reference_path)
-    )
+    reference = nib.load(str(reference_path))
 
     native_image = np.asarray(
         reference.dataobj,
         dtype=np.float32,
     )
 
-    if (
-        native_image.ndim == 4
-        and native_image.shape[-1] == 1
-    ):
+    if native_image.ndim == 4 and native_image.shape[-1] == 1:
         native_image = native_image[..., 0]
 
     if native_image.ndim != 3:
@@ -486,17 +424,10 @@ def invert_prediction_to_native_space(
     # Recover MONAI's actual foreground crop coordinates.
     # -------------------------------------------------------------
 
-    crop_coordinates = (
-        get_crop_coordinates_from_metadata(
-            batch
-        )
-    )
+    crop_coordinates = get_crop_coordinates_from_metadata(batch)
 
     if crop_coordinates is None:
-
-        print_image_metadata(
-            batch
-        )
+        print_image_metadata(batch)
 
         raise ValueError(
             "Could not recover the exact CropForegroundd "
@@ -526,11 +457,8 @@ def invert_prediction_to_native_space(
         )
 
     for axis in range(3):
-
         if start[axis] < 0:
-            raise ValueError(
-                f"Invalid crop start coordinate: {start}"
-            )
+            raise ValueError(f"Invalid crop start coordinate: {start}")
 
         if end[axis] > native_shape[axis]:
             raise ValueError(
@@ -541,39 +469,23 @@ def invert_prediction_to_native_space(
             )
 
         if end[axis] <= start[axis]:
-            raise ValueError(
-                "Invalid crop interval.\n"
-                f"  start={start}\n"
-                f"  end={end}"
-            )
+            raise ValueError(f"Invalid crop interval.\n  start={start}\n  end={end}")
 
-    expected_crop_shape = tuple(
-        end[axis] - start[axis]
-        for axis in range(3)
-    )
+    expected_crop_shape = tuple(end[axis] - start[axis] for axis in range(3))
 
-    actual_prediction_shape = tuple(
-        prediction.shape[2:]
-    )
+    actual_prediction_shape = tuple(prediction.shape[2:])
 
-    print(
-        f"  MONAI crop start: {start}"
-    )
+    print(f"  MONAI crop start: {start}")
 
-    print(
-        f"  MONAI crop end:   {end}"
-    )
+    print(f"  MONAI crop end:   {end}")
 
-    print(
-        f"  Crop shape:       {expected_crop_shape}"
-    )
+    print(f"  Crop shape:       {expected_crop_shape}")
 
     # -------------------------------------------------------------
     # Critical geometry check.
     # -------------------------------------------------------------
 
     if actual_prediction_shape != expected_crop_shape:
-
         raise ValueError(
             "Prediction/MONAI crop geometry mismatch.\n"
             f"  Prediction spatial shape: "
@@ -596,16 +508,11 @@ def invert_prediction_to_native_space(
 
     restored_predictions = []
 
-    for batch_index in range(
-        prediction.shape[0]
-    ):
-
-        cropped_prediction = (
-            prediction[
-                batch_index,
-                0,
-            ]
-        )
+    for batch_index in range(prediction.shape[0]):
+        cropped_prediction = prediction[
+            batch_index,
+            0,
+        ]
 
         restored = torch.zeros(
             native_shape,
@@ -614,20 +521,12 @@ def invert_prediction_to_native_space(
         )
 
         restored[
-            start[0]:end[0],
-            start[1]:end[1],
-            start[2]:end[2],
-        ] = (
-            torch.round(
-                cropped_prediction
-            ).to(
-                dtype=torch.uint8
-            )
-        )
+            start[0] : end[0],
+            start[1] : end[1],
+            start[2] : end[2],
+        ] = torch.round(cropped_prediction).to(dtype=torch.uint8)
 
-        restored_predictions.append(
-            restored
-        )
+        restored_predictions.append(restored)
 
     return torch.stack(
         restored_predictions,
@@ -656,14 +555,9 @@ def save_prediction_nifti(
     """
 
     if not reference_path.exists():
-        raise FileNotFoundError(
-            f"Reference MRI not found: "
-            f"{reference_path}"
-        )
+        raise FileNotFoundError(f"Reference MRI not found: {reference_path}")
 
-    reference = nib.load(
-        str(reference_path)
-    )
+    reference = nib.load(str(reference_path))
 
     prediction = np.asarray(
         prediction,
@@ -672,18 +566,11 @@ def save_prediction_nifti(
 
     reference_shape = reference.shape
 
-    if (
-        len(reference_shape) == 4
-        and reference_shape[-1] == 1
-    ):
-        reference_spatial_shape = (
-            reference_shape[:3]
-        )
+    if len(reference_shape) == 4 and reference_shape[-1] == 1:
+        reference_spatial_shape = reference_shape[:3]
 
     elif len(reference_shape) == 3:
-        reference_spatial_shape = (
-            reference_shape
-        )
+        reference_spatial_shape = reference_shape
 
     else:
         raise ValueError(
@@ -705,13 +592,9 @@ def save_prediction_nifti(
     # Use native MRI affine and header.
     header = reference.header.copy()
 
-    header.set_data_dtype(
-        np.uint8
-    )
+    header.set_data_dtype(np.uint8)
 
-    header.set_data_shape(
-        prediction.shape
-    )
+    header.set_data_shape(prediction.shape)
 
     prediction_image = nib.Nifti1Image(
         prediction,
@@ -749,17 +632,11 @@ def main() -> None:
     # Configuration
     # -----------------------------------------------------------------
 
-    config = load_config(
-        config_path
-    )
+    config = load_config(config_path)
 
-    print(
-        f"Configuration: {config_path}"
-    )
+    print(f"Configuration: {config_path}")
 
-    print(
-        f"Checkpoint:    {checkpoint_path}"
-    )
+    print(f"Checkpoint:    {checkpoint_path}")
 
     # -----------------------------------------------------------------
     # Device
@@ -771,20 +648,14 @@ def main() -> None:
     # Data
     # -----------------------------------------------------------------
 
-    datamodule = build_datamodule(
-        config
-    )
+    datamodule = build_datamodule(config)
 
     datamodule.setup()
 
     if datamodule.test_dataset is None:
-        raise RuntimeError(
-            "Test dataset was not initialized."
-        )
+        raise RuntimeError("Test dataset was not initialized.")
 
-    test_dataset = (
-        datamodule.test_dataset
-    )
+    test_dataset = datamodule.test_dataset
 
     # -----------------------------------------------------------------
     # Preprocessing summary
@@ -795,20 +666,11 @@ def main() -> None:
     print()
     print("Inference data configuration:")
 
-    print(
-        f"  Precomputed N4: "
-        f"{data_summary['use_precomputed_n4']}"
-    )
+    print(f"  Precomputed N4: {data_summary['use_precomputed_n4']}")
 
-    print(
-        f"  Runtime N4:     "
-        f"{data_summary['use_n4_bias_correction']}"
-    )
+    print(f"  Runtime N4:     {data_summary['use_n4_bias_correction']}")
 
-    print(
-        f"  Target spacing: "
-        f"{data_summary['target_spacing']}"
-    )
+    print(f"  Target spacing: {data_summary['target_spacing']}")
 
     # -----------------------------------------------------------------
     # Model
@@ -838,10 +700,7 @@ def main() -> None:
     )
 
     if len(roi_size) != 3:
-        raise ValueError(
-            "inference.roi_size must contain "
-            "exactly three values."
-        )
+        raise ValueError("inference.roi_size must contain exactly three values.")
 
     sw_batch_size = int(
         inference_config.get(
@@ -853,24 +712,18 @@ def main() -> None:
     overlap = float(
         inference_config.get(
             "overlap",
-            0.25,
+            0.50,
         )
     )
 
     print()
     print("Inference configuration:")
 
-    print(
-        f"  ROI size:       {roi_size}"
-    )
+    print(f"  ROI size:       {roi_size}")
 
-    print(
-        f"  SW batch size:  {sw_batch_size}"
-    )
+    print(f"  SW batch size:  {sw_batch_size}")
 
-    print(
-        f"  Overlap:        {overlap}"
-    )
+    print(f"  Overlap:        {overlap}")
 
     # -----------------------------------------------------------------
     # Test subjects
@@ -879,12 +732,8 @@ def main() -> None:
     print()
     print("Test subjects:")
 
-    for subject_id in sorted(
-        TEST_SUBJECTS
-    ):
-        print(
-            f"  - {subject_id}"
-        )
+    for subject_id in sorted(TEST_SUBJECTS):
+        print(f"  - {subject_id}")
 
     print("=" * 60)
 
@@ -898,21 +747,13 @@ def main() -> None:
 
     processed_subjects = 0
 
-    test_dataloader = (
-        datamodule.test_dataloader()
-    )
+    test_dataloader = datamodule.test_dataloader()
 
     with torch.inference_mode():
-
-        for index, batch in enumerate(
-            test_dataloader
-        ):
-
-            subject_id, reference_path = (
-                get_subject_info(
-                    test_dataset,
-                    index,
-                )
+        for index, batch in enumerate(test_dataloader):
+            subject_id, reference_path = get_subject_info(
+                test_dataset,
+                index,
             )
 
             # ---------------------------------------------------------
@@ -922,13 +763,9 @@ def main() -> None:
             if subject_id not in TEST_SUBJECTS:
                 continue
 
-            print(
-                f"{subject_id}..."
-            )
+            print(f"{subject_id}...")
 
-            images = batch[
-                "image"
-            ].to(
+            images = batch["image"].to(
                 device,
                 non_blocking=True,
             )
@@ -937,14 +774,12 @@ def main() -> None:
             # Sliding-window inference.
             # ---------------------------------------------------------
 
-            predictions = (
-                sliding_window_predict(
-                    model=model,
-                    images=images,
-                    roi_size=roi_size,
-                    sw_batch_size=sw_batch_size,
-                    overlap=overlap,
-                )
+            predictions = sliding_window_predict(
+                model=model,
+                images=images,
+                roi_size=roi_size,
+                sw_batch_size=sw_batch_size,
+                overlap=overlap,
             )
 
             # ---------------------------------------------------------
@@ -957,59 +792,35 @@ def main() -> None:
                 keepdim=True,
             )
 
-            print(
-                "  Transformed prediction "
-                f"shape: "
-                f"{tuple(predictions.shape)}"
-            )
+            print(f"  Transformed prediction shape: {tuple(predictions.shape)}")
 
             # ---------------------------------------------------------
             # Restore prediction to native MRI space.
             # ---------------------------------------------------------
 
-            native_prediction = (
-                invert_prediction_to_native_space(
-                    prediction=predictions,
-                    batch=batch,
-                    reference_path=reference_path,
-                )
+            native_prediction = invert_prediction_to_native_space(
+                prediction=predictions,
+                batch=batch,
+                reference_path=reference_path,
             )
 
-            prediction_np = (
-                native_prediction[0]
-                .cpu()
-                .numpy()
-                .astype(np.uint8)
-            )
+            prediction_np = native_prediction[0].cpu().numpy().astype(np.uint8)
 
-            print(
-                "  Native prediction "
-                f"shape: "
-                f"{prediction_np.shape}"
-            )
+            print(f"  Native prediction shape: {prediction_np.shape}")
 
             # ---------------------------------------------------------
             # Report predicted labels.
             # ---------------------------------------------------------
 
-            labels = np.unique(
-                prediction_np
-            )
+            labels = np.unique(prediction_np)
 
-            print(
-                "  Prediction labels: "
-                f"{labels.tolist()}"
-            )
+            print(f"  Prediction labels: {labels.tolist()}")
 
             # ---------------------------------------------------------
             # Save native-space NIfTI.
             # ---------------------------------------------------------
 
-            output_path = (
-                OUTPUT_DIR
-                / subject_id
-                / f"{subject_id}_pred.nii.gz"
-            )
+            output_path = OUTPUT_DIR / subject_id / f"{subject_id}_pred.nii.gz"
 
             save_prediction_nifti(
                 prediction=prediction_np,
@@ -1017,15 +828,9 @@ def main() -> None:
                 output_path=output_path,
             )
 
-            print(
-                f"  Reference MRI: "
-                f"{reference_path}"
-            )
+            print(f"  Reference MRI: {reference_path}")
 
-            print(
-                f"  Saved prediction: "
-                f"{output_path}"
-            )
+            print(f"  Saved prediction: {output_path}")
 
             processed_subjects += 1
 
@@ -1035,20 +840,11 @@ def main() -> None:
 
     print()
     print("=" * 60)
-    print(
-        "Test inference complete."
-    )
+    print("Test inference complete.")
 
-    print(
-        f"Processed subjects: "
-        f"{processed_subjects}/"
-        f"{len(TEST_SUBJECTS)}"
-    )
+    print(f"Processed subjects: {processed_subjects}/{len(TEST_SUBJECTS)}")
 
-    print(
-        f"Output directory: "
-        f"{OUTPUT_DIR}"
-    )
+    print(f"Output directory: {OUTPUT_DIR}")
 
     print()
 

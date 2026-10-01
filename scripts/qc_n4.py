@@ -8,7 +8,6 @@ import nibabel as nib
 import numpy as np
 from scipy.ndimage import binary_erosion
 
-
 # =====================================================================
 # PROJECT PATHS
 # =====================================================================
@@ -46,6 +45,7 @@ MAX_BIAS_GRADIENT_P95 = 0.05
 # UTILITY FUNCTIONS
 # =====================================================================
 
+
 def percentile(values: np.ndarray, q: float) -> float:
     """Return a percentile as a regular Python float."""
     return float(np.percentile(values, q))
@@ -75,7 +75,6 @@ def load_3d_array(
     )
 
     if array.ndim == 4:
-
         if array.shape[-1] != 1:
             raise ValueError(
                 f"Expected a singleton fourth dimension, "
@@ -152,7 +151,6 @@ def foreground_stats(
     foreground_values = values[foreground]
 
     if foreground_values.size == 0:
-
         return {
             f"{prefix}_voxels": 0,
             f"{prefix}_min": np.nan,
@@ -200,45 +198,27 @@ def calculate_reconstruction_error(
     The calculation is performed in float64.
     """
 
-    raw_fg = raw[foreground].astype(
-        np.float64
-    )
+    raw_fg = raw[foreground].astype(np.float64)
 
-    n4_fg = n4[foreground].astype(
-        np.float64
-    )
+    n4_fg = n4[foreground].astype(np.float64)
 
-    bias_fg = bias[foreground].astype(
-        np.float64
-    )
+    bias_fg = bias[foreground].astype(np.float64)
 
     reconstructed = n4_fg * bias_fg
 
     valid = np.abs(raw_fg) > 1e-8
 
-    relative_error = np.zeros_like(
-        raw_fg
+    relative_error = np.zeros_like(raw_fg)
+
+    relative_error[valid] = np.abs(reconstructed[valid] - raw_fg[valid]) / np.abs(
+        raw_fg[valid]
     )
 
-    relative_error[valid] = (
-        np.abs(
-            reconstructed[valid]
-            - raw_fg[valid]
-        )
-        / np.abs(raw_fg[valid])
-    )
-
-    absolute_error = np.abs(
-        reconstructed - raw_fg
-    )
+    absolute_error = np.abs(reconstructed - raw_fg)
 
     return {
-        "reconstruction_rel_mean": float(
-            np.mean(relative_error)
-        ),
-        "reconstruction_rel_median": float(
-            np.median(relative_error)
-        ),
+        "reconstruction_rel_mean": float(np.mean(relative_error)),
+        "reconstruction_rel_median": float(np.median(relative_error)),
         "reconstruction_rel_p95": percentile(
             relative_error,
             95,
@@ -247,15 +227,9 @@ def calculate_reconstruction_error(
             relative_error,
             99,
         ),
-        "reconstruction_rel_max": float(
-            np.max(relative_error)
-        ),
-        "reconstruction_abs_mean": float(
-            np.mean(absolute_error)
-        ),
-        "reconstruction_abs_max": float(
-            np.max(absolute_error)
-        ),
+        "reconstruction_rel_max": float(np.max(relative_error)),
+        "reconstruction_abs_mean": float(np.mean(absolute_error)),
+        "reconstruction_abs_max": float(np.max(absolute_error)),
     }
 
 
@@ -289,10 +263,7 @@ def calculate_bias_smoothness(
         border_value=0,
     )
 
-    if np.count_nonzero(
-        interior_mask
-    ) == 0:
-
+    if np.count_nonzero(interior_mask) == 0:
         interior_mask = foreground
 
     gradient_x, gradient_y, gradient_z = np.gradient(
@@ -302,15 +273,9 @@ def calculate_bias_smoothness(
         spacing[2],
     )
 
-    gradient_magnitude = np.sqrt(
-        gradient_x**2
-        + gradient_y**2
-        + gradient_z**2
-    )
+    gradient_magnitude = np.sqrt(gradient_x**2 + gradient_y**2 + gradient_z**2)
 
-    values = gradient_magnitude[
-        interior_mask
-    ]
+    values = gradient_magnitude[interior_mask]
 
     return {
         "bias_gradient_median": percentile(
@@ -325,14 +290,8 @@ def calculate_bias_smoothness(
             values,
             99,
         ),
-        "bias_gradient_rms": float(
-            np.sqrt(
-                np.mean(values**2)
-            )
-        ),
-        "bias_gradient_max": float(
-            np.max(values)
-        ),
+        "bias_gradient_rms": float(np.sqrt(np.mean(values**2))),
+        "bias_gradient_max": float(np.max(values)),
     }
 
 
@@ -340,10 +299,10 @@ def calculate_bias_smoothness(
 # SUBJECT QC
 # =====================================================================
 
+
 def qc_subject(
     subject: str,
 ) -> dict:
-
     # -------------------------------------------------------------
     # Actual project structure
     #
@@ -357,22 +316,11 @@ def qc_subject(
     #   data/processed/n4_debug/IBSR_01_bias_field.nii.gz
     # -------------------------------------------------------------
 
-    raw_path = (
-        RAW_DIR
-        / subject
-        / f"{subject}.nii.gz"
-    )
+    raw_path = RAW_DIR / subject / f"{subject}.nii.gz"
 
-    n4_path = (
-        N4_DIR
-        / subject
-        / f"{subject}.nii.gz"
-    )
+    n4_path = N4_DIR / subject / f"{subject}.nii.gz"
 
-    bias_path = (
-        BIAS_DIR
-        / f"{subject}_bias_field.nii.gz"
-    )
+    bias_path = BIAS_DIR / f"{subject}_bias_field.nii.gz"
 
     print()
     print("=" * 70)
@@ -411,18 +359,12 @@ def qc_subject(
         n4_path,
         bias_path,
     ):
-
         if not path.exists():
-            missing_files.append(
-                str(path)
-            )
+            missing_files.append(str(path))
 
     if missing_files:
-
         result["status"] = "FAIL"
-        result["failure_reason"] = (
-            "Missing file(s)"
-        )
+        result["failure_reason"] = "Missing file(s)"
 
         print()
         print("FAIL: missing file(s):")
@@ -437,30 +379,18 @@ def qc_subject(
     # -------------------------------------------------------------
 
     try:
+        raw_img, raw = load_3d_array(raw_path)
 
-        raw_img, raw = load_3d_array(
-            raw_path
-        )
+        n4_img, n4 = load_3d_array(n4_path)
 
-        n4_img, n4 = load_3d_array(
-            n4_path
-        )
-
-        bias_img, bias = load_3d_array(
-            bias_path
-        )
+        bias_img, bias = load_3d_array(bias_path)
 
     except Exception as exc:
-
         result["status"] = "FAIL"
-        result["failure_reason"] = (
-            f"Could not load NIfTI file: {exc}"
-        )
+        result["failure_reason"] = f"Could not load NIfTI file: {exc}"
 
         print()
-        print(
-            f"FAIL: could not load NIfTI files: {exc}"
-        )
+        print(f"FAIL: could not load NIfTI files: {exc}")
 
         return result
 
@@ -474,37 +404,26 @@ def qc_subject(
     # GEOMETRY
     # -------------------------------------------------------------
 
-    geometry_pass = (
-        geometry_matches(
-            raw_img,
-            raw,
-            n4_img,
-            n4,
-        )
-        and geometry_matches(
-            raw_img,
-            raw,
-            bias_img,
-            bias,
-        )
+    geometry_pass = geometry_matches(
+        raw_img,
+        raw,
+        n4_img,
+        n4,
+    ) and geometry_matches(
+        raw_img,
+        raw,
+        bias_img,
+        bias,
     )
 
-    result["geometry_pass"] = (
-        geometry_pass
-    )
+    result["geometry_pass"] = geometry_pass
 
     print()
-    print(
-        f"Geometry:              "
-        f"{'PASS' if geometry_pass else 'FAIL'}"
-    )
+    print(f"Geometry:              {'PASS' if geometry_pass else 'FAIL'}")
 
     if not geometry_pass:
-
         result["status"] = "FAIL"
-        result["failure_reason"] = (
-            "Geometry mismatch"
-        )
+        result["failure_reason"] = "Geometry mismatch"
 
         return result
 
@@ -514,29 +433,17 @@ def qc_subject(
 
     foreground = raw > 0
 
-    raw_foreground_voxels = int(
-        np.count_nonzero(
-            foreground
-        )
-    )
+    raw_foreground_voxels = int(np.count_nonzero(foreground))
 
     n4_foreground = n4 > 0
 
-    n4_foreground_voxels = int(
-        np.count_nonzero(
-            n4_foreground
-        )
-    )
+    n4_foreground_voxels = int(np.count_nonzero(n4_foreground))
 
     voxel_count_pass = (
-        raw_foreground_voxels
-        == n4_foreground_voxels
-        and raw_foreground_voxels > 0
+        raw_foreground_voxels == n4_foreground_voxels and raw_foreground_voxels > 0
     )
 
-    result["voxel_count_pass"] = (
-        voxel_count_pass
-    )
+    result["voxel_count_pass"] = voxel_count_pass
 
     print(
         f"Foreground voxels:    "
@@ -546,55 +453,28 @@ def qc_subject(
     )
 
     if not voxel_count_pass:
-
         result["status"] = "FAIL"
-        result["failure_reason"] = (
-            "Foreground voxel count changed"
-        )
+        result["failure_reason"] = "Foreground voxel count changed"
 
     # -------------------------------------------------------------
     # FINITE VALUES
     # -------------------------------------------------------------
 
-    raw_finite = bool(
-        np.all(
-            np.isfinite(raw)
-        )
-    )
+    raw_finite = bool(np.all(np.isfinite(raw)))
 
-    n4_finite = bool(
-        np.all(
-            np.isfinite(n4)
-        )
-    )
+    n4_finite = bool(np.all(np.isfinite(n4)))
 
-    bias_finite = bool(
-        np.all(
-            np.isfinite(bias)
-        )
-    )
+    bias_finite = bool(np.all(np.isfinite(bias)))
 
-    finite_pass = (
-        raw_finite
-        and n4_finite
-        and bias_finite
-    )
+    finite_pass = raw_finite and n4_finite and bias_finite
 
-    result["finite_pass"] = (
-        finite_pass
-    )
+    result["finite_pass"] = finite_pass
 
-    print(
-        f"Finite values:        "
-        f"{'PASS' if finite_pass else 'FAIL'}"
-    )
+    print(f"Finite values:        {'PASS' if finite_pass else 'FAIL'}")
 
     if not finite_pass:
-
         result["status"] = "FAIL"
-        result["failure_reason"] = (
-            "NaN or Inf detected"
-        )
+        result["failure_reason"] = "NaN or Inf detected"
 
         return result
 
@@ -626,37 +506,17 @@ def qc_subject(
         )
     )
 
-    bias_foreground = bias[
-        foreground
-    ]
+    bias_foreground = bias[foreground]
 
-    bias_mean = float(
-        np.mean(
-            bias_foreground
-        )
-    )
+    bias_mean = float(np.mean(bias_foreground))
 
-    bias_std = float(
-        np.std(
-            bias_foreground
-        )
-    )
+    bias_std = float(np.std(bias_foreground))
 
-    bias_median = float(
-        np.median(
-            bias_foreground
-        )
-    )
+    bias_median = float(np.median(bias_foreground))
 
-    bias_cv = (
-        bias_std / bias_mean
-        if bias_mean != 0
-        else np.inf
-    )
+    bias_cv = bias_std / bias_mean if bias_mean != 0 else np.inf
 
-    result["bias_cv"] = float(
-        bias_cv
-    )
+    result["bias_cv"] = float(bias_cv)
 
     # A multiplicative bias field should be
     # strictly positive in the foreground.
@@ -664,237 +524,110 @@ def qc_subject(
     # The upper bound is deliberately generous and is only intended
     # as a sanity check, not a claim about a universal N4 limit.
     bias_range_pass = (
-        float(
-            np.min(
-                bias_foreground
-            )
-        ) > 0
-        and
-        float(
-            np.max(
-                bias_foreground
-            )
-        ) < 2.0
+        float(np.min(bias_foreground)) > 0 and float(np.max(bias_foreground)) < 2.0
     )
 
-    result["bias_range_pass"] = (
-        bias_range_pass
-    )
+    result["bias_range_pass"] = bias_range_pass
 
     print()
     print("RAW foreground:")
-    print(
-        f"  Mean:       "
-        f"{result['raw_mean']:.4f}"
-    )
-    print(
-        f"  Median:     "
-        f"{result['raw_median']:.4f}"
-    )
-    print(
-        f"  P01-P99:    "
-        f"{result['raw_p01']:.4f} - "
-        f"{result['raw_p99']:.4f}"
-    )
+    print(f"  Mean:       {result['raw_mean']:.4f}")
+    print(f"  Median:     {result['raw_median']:.4f}")
+    print(f"  P01-P99:    {result['raw_p01']:.4f} - {result['raw_p99']:.4f}")
 
     print("N4 foreground:")
-    print(
-        f"  Mean:       "
-        f"{result['n4_mean']:.4f}"
-    )
-    print(
-        f"  Median:     "
-        f"{result['n4_median']:.4f}"
-    )
-    print(
-        f"  P01-P99:    "
-        f"{result['n4_p01']:.4f} - "
-        f"{result['n4_p99']:.4f}"
-    )
+    print(f"  Mean:       {result['n4_mean']:.4f}")
+    print(f"  Median:     {result['n4_median']:.4f}")
+    print(f"  P01-P99:    {result['n4_p01']:.4f} - {result['n4_p99']:.4f}")
 
     print("Bias field:")
-    print(
-        f"  Min:        "
-        f"{result['bias_min']:.6f}"
-    )
-    print(
-        f"  Max:        "
-        f"{result['bias_max']:.6f}"
-    )
-    print(
-        f"  Median:     "
-        f"{bias_median:.6f}"
-    )
-    print(
-        f"  Mean:       "
-        f"{bias_mean:.6f}"
-    )
-    print(
-        f"  Std:        "
-        f"{bias_std:.6f}"
-    )
-    print(
-        f"  CV:         "
-        f"{bias_cv:.6f}"
-    )
+    print(f"  Min:        {result['bias_min']:.6f}")
+    print(f"  Max:        {result['bias_max']:.6f}")
+    print(f"  Median:     {bias_median:.6f}")
+    print(f"  Mean:       {bias_mean:.6f}")
+    print(f"  Std:        {bias_std:.6f}")
+    print(f"  CV:         {bias_cv:.6f}")
 
-    print(
-        f"Bias range:           "
-        f"{'PASS' if bias_range_pass else 'FAIL'}"
-    )
+    print(f"Bias range:           {'PASS' if bias_range_pass else 'FAIL'}")
 
     if not bias_range_pass:
-
         result["status"] = "FAIL"
-        result["failure_reason"] = (
-            "Invalid bias-field range"
-        )
+        result["failure_reason"] = "Invalid bias-field range"
 
     # -------------------------------------------------------------
     # RECONSTRUCTION
     # -------------------------------------------------------------
 
-    reconstruction = (
-        calculate_reconstruction_error(
-            raw=raw,
-            n4=n4,
-            bias=bias,
-            foreground=foreground,
-        )
+    reconstruction = calculate_reconstruction_error(
+        raw=raw,
+        n4=n4,
+        bias=bias,
+        foreground=foreground,
     )
 
-    result.update(
-        reconstruction
-    )
+    result.update(reconstruction)
 
     reconstruction_pass = (
-        result[
-            "reconstruction_rel_p99"
-        ]
-        <= MAX_RECONSTRUCTION_REL_ERROR
+        result["reconstruction_rel_p99"] <= MAX_RECONSTRUCTION_REL_ERROR
     )
 
-    result["reconstruction_pass"] = (
-        reconstruction_pass
-    )
+    result["reconstruction_pass"] = reconstruction_pass
 
     print()
-    print(
-        "Reconstruction: "
-        "N4 × bias ≈ raw"
-    )
+    print("Reconstruction: N4 × bias ≈ raw")
 
-    print(
-        f"  Mean relative error:   "
-        f"{result['reconstruction_rel_mean']:.3e}"
-    )
+    print(f"  Mean relative error:   {result['reconstruction_rel_mean']:.3e}")
 
-    print(
-        f"  Median relative error: "
-        f"{result['reconstruction_rel_median']:.3e}"
-    )
+    print(f"  Median relative error: {result['reconstruction_rel_median']:.3e}")
 
-    print(
-        f"  P95 relative error:     "
-        f"{result['reconstruction_rel_p95']:.3e}"
-    )
+    print(f"  P95 relative error:     {result['reconstruction_rel_p95']:.3e}")
 
-    print(
-        f"  P99 relative error:     "
-        f"{result['reconstruction_rel_p99']:.3e}"
-    )
+    print(f"  P99 relative error:     {result['reconstruction_rel_p99']:.3e}")
 
-    print(
-        f"  Max relative error:     "
-        f"{result['reconstruction_rel_max']:.3e}"
-    )
+    print(f"  Max relative error:     {result['reconstruction_rel_max']:.3e}")
 
-    print(
-        f"  Mean absolute error:    "
-        f"{result['reconstruction_abs_mean']:.3e}"
-    )
+    print(f"  Mean absolute error:    {result['reconstruction_abs_mean']:.3e}")
 
-    print(
-        f"  Max absolute error:     "
-        f"{result['reconstruction_abs_max']:.3e}"
-    )
+    print(f"  Max absolute error:     {result['reconstruction_abs_max']:.3e}")
 
-    print(
-        f"Reconstruction:       "
-        f"{'PASS' if reconstruction_pass else 'FAIL'}"
-    )
+    print(f"Reconstruction:       {'PASS' if reconstruction_pass else 'FAIL'}")
 
     if not reconstruction_pass:
-
         result["status"] = "FAIL"
-        result["failure_reason"] = (
-            "Reconstruction error exceeds threshold"
-        )
+        result["failure_reason"] = "Reconstruction error exceeds threshold"
 
     # -------------------------------------------------------------
     # BIAS SMOOTHNESS
     # -------------------------------------------------------------
 
-    spacing = tuple(
-        float(x)
-        for x in raw_img.header.get_zooms()[:3]
+    spacing = tuple(float(x) for x in raw_img.header.get_zooms()[:3])
+
+    smoothness = calculate_bias_smoothness(
+        bias=bias,
+        foreground=foreground,
+        spacing=spacing,
     )
 
-    smoothness = (
-        calculate_bias_smoothness(
-            bias=bias,
-            foreground=foreground,
-            spacing=spacing,
-        )
-    )
+    result.update(smoothness)
 
-    result.update(
-        smoothness
-    )
+    smoothness_pass = result["bias_gradient_p95"] <= MAX_BIAS_GRADIENT_P95
 
-    smoothness_pass = (
-        result["bias_gradient_p95"]
-        <= MAX_BIAS_GRADIENT_P95
-    )
-
-    result["smoothness_pass"] = (
-        smoothness_pass
-    )
+    result["smoothness_pass"] = smoothness_pass
 
     print()
-    print(
-        "Bias-field spatial smoothness:"
-    )
+    print("Bias-field spatial smoothness:")
 
-    print(
-        f"  Median |gradient|: "
-        f"{result['bias_gradient_median']:.6f}"
-    )
+    print(f"  Median |gradient|: {result['bias_gradient_median']:.6f}")
 
-    print(
-        f"  P95 |gradient|:    "
-        f"{result['bias_gradient_p95']:.6f}"
-    )
+    print(f"  P95 |gradient|:    {result['bias_gradient_p95']:.6f}")
 
-    print(
-        f"  P99 |gradient|:    "
-        f"{result['bias_gradient_p99']:.6f}"
-    )
+    print(f"  P99 |gradient|:    {result['bias_gradient_p99']:.6f}")
 
-    print(
-        f"  RMS |gradient|:    "
-        f"{result['bias_gradient_rms']:.6f}"
-    )
+    print(f"  RMS |gradient|:    {result['bias_gradient_rms']:.6f}")
 
-    print(
-        f"  Max |gradient|:    "
-        f"{result['bias_gradient_max']:.6f}"
-    )
+    print(f"  Max |gradient|:    {result['bias_gradient_max']:.6f}")
 
-    print(
-        f"Smoothness:           "
-        f"{'PASS' if smoothness_pass else 'REVIEW'}"
-    )
+    print(f"Smoothness:           {'PASS' if smoothness_pass else 'REVIEW'}")
 
     # Smoothness remains a review criterion.
     # It does not automatically invalidate otherwise valid N4 output.
@@ -912,24 +645,17 @@ def qc_subject(
     ]
 
     if all(hard_checks):
-
         result["status"] = "PASS"
         result["failure_reason"] = ""
 
     else:
-
         result["status"] = "FAIL"
 
         if not result["failure_reason"]:
-            result["failure_reason"] = (
-                "One or more hard QC checks failed"
-            )
+            result["failure_reason"] = "One or more hard QC checks failed"
 
     print()
-    print(
-        f"OVERALL:              "
-        f"{result['status']}"
-    )
+    print(f"OVERALL:              {result['status']}")
 
     return result
 
@@ -938,29 +664,22 @@ def qc_subject(
 # CSV REPORT
 # =====================================================================
 
+
 def save_csv(
     results: list[dict],
 ) -> None:
-
     REPORT_DIR.mkdir(
         parents=True,
         exist_ok=True,
     )
 
-    fieldnames = sorted(
-        {
-            key
-            for result in results
-            for key in result.keys()
-        }
-    )
+    fieldnames = sorted({key for result in results for key in result.keys()})
 
     with CSV_PATH.open(
         "w",
         newline="",
         encoding="utf-8",
     ) as file:
-
         writer = csv.DictWriter(
             file,
             fieldnames=fieldnames,
@@ -978,39 +697,26 @@ def save_csv(
 # MAIN
 # =====================================================================
 
-def main() -> None:
 
+def main() -> None:
     parser = argparse.ArgumentParser(
-        description=(
-            "Run automated QC on precomputed "
-            "IBSR-18 N4 images."
-        )
+        description=("Run automated QC on precomputed IBSR-18 N4 images.")
     )
 
     parser.add_argument(
         "--subject",
         type=str,
         default=None,
-        help=(
-            "Run QC for one subject, "
-            "e.g. IBSR_01."
-        ),
+        help=("Run QC for one subject, e.g. IBSR_01."),
     )
 
     args = parser.parse_args()
 
     if args.subject:
-
-        subjects = [
-            args.subject
-        ]
+        subjects = [args.subject]
 
     else:
-
-        subjects = [
-            f"IBSR_{i:02d}"
-            for i in range(1, 19)
-        ]
+        subjects = [f"IBSR_{i:02d}" for i in range(1, 19)]
 
     print("=" * 70)
     print("IBSR-18 N4 QUALITY CONTROL")
@@ -1038,30 +744,17 @@ def main() -> None:
 
     print()
     print("Thresholds:")
-    print(
-        f"  Reconstruction P99 relative error <= "
-        f"{MAX_RECONSTRUCTION_REL_ERROR:.1e}"
-    )
+    print(f"  Reconstruction P99 relative error <= {MAX_RECONSTRUCTION_REL_ERROR:.1e}")
 
-    print(
-        f"  Bias gradient P95 <= "
-        f"{MAX_BIAS_GRADIENT_P95:.3f} "
-        f"(review criterion)"
-    )
+    print(f"  Bias gradient P95 <= {MAX_BIAS_GRADIENT_P95:.3f} (review criterion)")
 
     print()
-    print(
-        f"Subjects to check: "
-        f"{len(subjects)}"
-    )
+    print(f"Subjects to check: {len(subjects)}")
 
     results = []
 
     for subject in subjects:
-
-        results.append(
-            qc_subject(subject)
-        )
+        results.append(qc_subject(subject))
 
     save_csv(results)
 
@@ -1069,17 +762,9 @@ def main() -> None:
     # SUMMARY
     # -------------------------------------------------------------
 
-    passed = [
-        result
-        for result in results
-        if result["status"] == "PASS"
-    ]
+    passed = [result for result in results if result["status"] == "PASS"]
 
-    failed = [
-        result
-        for result in results
-        if result["status"] == "FAIL"
-    ]
+    failed = [result for result in results if result["status"] == "FAIL"]
 
     print()
     print("=" * 70)
@@ -1087,30 +772,17 @@ def main() -> None:
     print("=" * 70)
 
     print()
-    print(
-        f"Subjects checked:     "
-        f"{len(results)}"
-    )
+    print(f"Subjects checked:     {len(results)}")
 
-    print(
-        f"Passed:               "
-        f"{len(passed)}"
-    )
+    print(f"Passed:               {len(passed)}")
 
-    print(
-        f"Failed:               "
-        f"{len(failed)}"
-    )
+    print(f"Failed:               {len(failed)}")
 
     if failed:
-
         print()
-        print(
-            "Subjects requiring attention:"
-        )
+        print("Subjects requiring attention:")
 
         for result in failed:
-
             print(
                 f"  {result['subject']}: "
                 f"{result.get('failure_reason', 'Unknown reason')}"
@@ -1119,27 +791,15 @@ def main() -> None:
     print()
 
     if not failed:
-
-        print(
-            "ALL HARD QC CHECKS PASSED."
-        )
+        print("ALL HARD QC CHECKS PASSED.")
 
         print()
-        print(
-            "The precomputed N4 dataset is ready "
-            "for Experiment 4 training."
-        )
+        print("The precomputed N4 dataset is ready for Experiment 4 training.")
 
     else:
+        print("QC FAILED for one or more subjects.")
 
-        print(
-            "QC FAILED for one or more subjects."
-        )
-
-        print(
-            "Do NOT start Experiment 4 until the "
-            "failures have been investigated."
-        )
+        print("Do NOT start Experiment 4 until the failures have been investigated.")
 
 
 if __name__ == "__main__":

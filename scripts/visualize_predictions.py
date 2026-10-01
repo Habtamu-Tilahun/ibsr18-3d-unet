@@ -63,30 +63,13 @@ from ibsr_unet.visualization.plots import plot_prediction_comparison
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
-CONFIG_PATH = (
-    PROJECT_ROOT
-    / "configs"
-    / "train.yaml"
-)
+CONFIG_PATH = PROJECT_ROOT / "configs" / "train.yaml"
 
-CHECKPOINT_PATH = (
-    PROJECT_ROOT
-    / "outputs"
-    / "checkpoints"
-    / "best_model.pt"
-)
+CHECKPOINT_PATH = PROJECT_ROOT / "outputs" / "checkpoints" / "best_model.pt"
 
-PREDICTION_DIR = (
-    PROJECT_ROOT
-    / "outputs"
-    / "predictions"
-)
+PREDICTION_DIR = PROJECT_ROOT / "outputs" / "predictions"
 
-VISUALIZATION_DIR = (
-    PROJECT_ROOT
-    / "outputs"
-    / "visualizations"
-)
+VISUALIZATION_DIR = PROJECT_ROOT / "outputs" / "visualizations"
 
 
 # ---------------------------------------------------------------------
@@ -111,9 +94,7 @@ def load_config(
     """
 
     if not config_path.exists():
-        raise FileNotFoundError(
-            f"Configuration file not found: {config_path}"
-        )
+        raise FileNotFoundError(f"Configuration file not found: {config_path}")
 
     with config_path.open(
         "r",
@@ -122,9 +103,7 @@ def load_config(
         config = yaml.safe_load(file)
 
     if not isinstance(config, dict):
-        raise ValueError(
-            "Expected the YAML configuration to contain a dictionary."
-        )
+        raise ValueError("Expected the YAML configuration to contain a dictionary.")
 
     return config
 
@@ -154,15 +133,9 @@ def build_datamodule(
     # Resolve data paths.
     # -------------------------------------------------------------
 
-    data_dir = (
-        PROJECT_ROOT
-        / data_config["root_dir"]
-    )
+    data_dir = PROJECT_ROOT / data_config["root_dir"]
 
-    splits_dir = (
-        PROJECT_ROOT
-        / data_config["splits_dir"]
-    )
+    splits_dir = PROJECT_ROOT / data_config["splits_dir"]
 
     # -------------------------------------------------------------
     # Native spacing.
@@ -170,17 +143,12 @@ def build_datamodule(
     # Experiment 1 does not resample the images.
     # -------------------------------------------------------------
 
-    spacing_config = data_config.get(
-        "spacing"
-    )
+    spacing_config = data_config.get("spacing")
 
     if spacing_config is None:
         target_spacing = None
     else:
-        target_spacing = tuple(
-            float(value)
-            for value in spacing_config
-        )
+        target_spacing = tuple(float(value) for value in spacing_config)
 
     # -------------------------------------------------------------
     # Patch size.
@@ -261,23 +229,11 @@ def build_model(
     model_config = config["model"]
 
     model = build_unet(
-        in_channels=int(
-            model_config["in_channels"]
-        ),
-        out_channels=int(
-            model_config["out_channels"]
-        ),
-        channels=tuple(
-            int(value)
-            for value in model_config["channels"]
-        ),
-        strides=tuple(
-            int(value)
-            for value in model_config["strides"]
-        ),
-        num_res_units=int(
-            model_config["num_res_units"]
-        ),
+        in_channels=int(model_config["in_channels"]),
+        out_channels=int(model_config["out_channels"]),
+        channels=tuple(int(value) for value in model_config["channels"]),
+        strides=tuple(int(value) for value in model_config["strides"]),
+        num_res_units=int(model_config["num_res_units"]),
     )
 
     return model.to(device)
@@ -298,9 +254,7 @@ def load_checkpoint(
     """
 
     if not checkpoint_path.exists():
-        raise FileNotFoundError(
-            f"Checkpoint not found: {checkpoint_path}"
-        )
+        raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
 
     checkpoint = torch.load(
         checkpoint_path,
@@ -309,18 +263,12 @@ def load_checkpoint(
     )
 
     if not isinstance(checkpoint, dict):
-        raise ValueError(
-            "Expected checkpoint to contain a dictionary."
-        )
+        raise ValueError("Expected checkpoint to contain a dictionary.")
 
     if "model_state_dict" not in checkpoint:
-        raise KeyError(
-            "Checkpoint does not contain 'model_state_dict'."
-        )
+        raise KeyError("Checkpoint does not contain 'model_state_dict'.")
 
-    model.load_state_dict(
-        checkpoint["model_state_dict"]
-    )
+    model.load_state_dict(checkpoint["model_state_dict"])
 
     return checkpoint
 
@@ -350,8 +298,7 @@ def get_subject_info_from_dataset(
 
     if not hasattr(dataset, "data"):
         raise AttributeError(
-            "Validation dataset does not expose the expected "
-            "`data` attribute."
+            "Validation dataset does not expose the expected `data` attribute."
         )
 
     dataset_data = dataset.data
@@ -360,14 +307,10 @@ def get_subject_info_from_dataset(
         dataset_data,
         (list, tuple),
     ):
-        raise TypeError(
-            "Expected validation dataset.data to be a list or tuple."
-        )
+        raise TypeError("Expected validation dataset.data to be a list or tuple.")
 
     if index < 0 or index >= len(dataset_data):
-        raise IndexError(
-            f"Dataset index {index} is out of range."
-        )
+        raise IndexError(f"Dataset index {index} is out of range.")
 
     data_item = dataset_data[index]
 
@@ -380,14 +323,10 @@ def get_subject_info_from_dataset(
             f"but received {type(data_item).__name__}."
         )
 
-    image_path = data_item.get(
-        "image"
-    )
+    image_path = data_item.get("image")
 
     if image_path is None:
-        raise KeyError(
-            "Validation dataset item does not contain an 'image' path."
-        )
+        raise KeyError("Validation dataset item does not contain an 'image' path.")
 
     if isinstance(
         image_path,
@@ -401,24 +340,18 @@ def get_subject_info_from_dataset(
 
         image_path = image_path[0]
 
-    image_path = Path(
-        str(image_path)
-    )
+    image_path = Path(str(image_path))
 
     if not image_path.exists():
         raise FileNotFoundError(
-            "Reference MRI from dataset item does not exist: "
-            f"{image_path}"
+            f"Reference MRI from dataset item does not exist: {image_path}"
         )
 
     subject_id = image_path.parent.name
 
-    if not subject_id.startswith(
-        "IBSR_"
-    ):
+    if not subject_id.startswith("IBSR_"):
         raise ValueError(
-            "Could not determine a valid IBSR subject ID from image path: "
-            f"{image_path}"
+            f"Could not determine a valid IBSR subject ID from image path: {image_path}"
         )
 
     return (
@@ -486,11 +419,7 @@ def invert_prediction_to_native_space(
 
     inversion_batch = dict(batch)
 
-    inversion_batch["prediction"] = (
-        prediction.to(
-            dtype=torch.float32
-        )
-    )
+    inversion_batch["prediction"] = prediction.to(dtype=torch.float32)
 
     # -------------------------------------------------------------
     # Invert the validation transforms.
@@ -507,57 +436,36 @@ def invert_prediction_to_native_space(
         to_tensor=True,
     )
 
-    inversion_batch = inverter(
-        inversion_batch
-    )
+    inversion_batch = inverter(inversion_batch)
 
-    restored_prediction = (
-        inversion_batch["prediction"]
-    )
+    restored_prediction = inversion_batch["prediction"]
 
     if isinstance(
         restored_prediction,
         torch.Tensor,
     ):
-        restored_prediction = (
-            restored_prediction
-            .detach()
-            .cpu()
-        )
+        restored_prediction = restored_prediction.detach().cpu()
     else:
-        restored_prediction = torch.as_tensor(
-            restored_prediction
-        )
+        restored_prediction = torch.as_tensor(restored_prediction)
 
     # -------------------------------------------------------------
     # Invertd normally returns [B,1,X,Y,Z] when operating with
     # channel-first metadata. Remove the singleton channel.
     # -------------------------------------------------------------
 
-    if (
-        restored_prediction.ndim == 5
-        and restored_prediction.shape[1] == 1
-    ):
-        restored_prediction = (
-            restored_prediction[:, 0]
-        )
+    if restored_prediction.ndim == 5 and restored_prediction.shape[1] == 1:
+        restored_prediction = restored_prediction[:, 0]
 
     if restored_prediction.ndim != 4:
         raise ValueError(
-            "Unexpected inverted prediction shape: "
-            f"{tuple(restored_prediction.shape)}"
+            f"Unexpected inverted prediction shape: {tuple(restored_prediction.shape)}"
         )
 
     # -------------------------------------------------------------
     # Convert back to discrete class labels.
     # -------------------------------------------------------------
 
-    restored_prediction = (
-        torch.round(
-            restored_prediction
-        )
-        .to(dtype=torch.uint8)
-    )
+    restored_prediction = torch.round(restored_prediction).to(dtype=torch.uint8)
 
     return restored_prediction
 
@@ -593,17 +501,13 @@ def save_prediction_nifti(
 
     The singleton dimension is therefore ignored when validating the
     spatial geometry.
-    
+
     """
 
     if not reference_path.exists():
-        raise FileNotFoundError(
-            f"Reference MRI not found: {reference_path}"
-        )
+        raise FileNotFoundError(f"Reference MRI not found: {reference_path}")
 
-    reference = nib.load(
-        str(reference_path)
-    )
+    reference = nib.load(str(reference_path))
 
     prediction = np.asarray(
         prediction,
@@ -626,13 +530,8 @@ def save_prediction_nifti(
 
     reference_shape = reference.shape
 
-    if (
-        len(reference_shape) == 4
-        and reference_shape[-1] == 1
-    ):
-        reference_spatial_shape = (
-            reference_shape[:3]
-        )
+    if len(reference_shape) == 4 and reference_shape[-1] == 1:
+        reference_spatial_shape = reference_shape[:3]
     elif len(reference_shape) == 3:
         reference_spatial_shape = reference_shape
     else:
@@ -660,16 +559,11 @@ def save_prediction_nifti(
 
     header = reference.header.copy()
 
-    header.set_data_dtype(
-        np.uint8
-    )
-
+    header.set_data_dtype(np.uint8)
 
     # Ensure the header describes the 3D prediction rather than the
     # raw image's trailing singleton dimension.
-    header.set_data_shape(
-        prediction.shape
-    )
+    header.set_data_shape(prediction.shape)
 
     prediction_image = nib.Nifti1Image(
         prediction,
@@ -708,15 +602,9 @@ def tensor_to_numpy(
         value,
         torch.Tensor,
     ):
-        return (
-            value.detach()
-            .cpu()
-            .numpy()
-        )
+        return value.detach().cpu().numpy()
 
-    return np.asarray(
-        value
-    )
+    return np.asarray(value)
 
 
 def remove_singleton_channel(
@@ -726,10 +614,7 @@ def remove_singleton_channel(
     Remove a leading singleton channel dimension if present.
     """
 
-    if (
-        array.ndim == 4
-        and array.shape[0] == 1
-    ):
+    if array.ndim == 4 and array.shape[0] == 1:
         return array[0]
 
     return array
@@ -780,59 +665,31 @@ def generate_visualizations(
         )
 
     print()
-    print(
-        "Generating qualitative results..."
-    )
-    print(
-        "-" * 70
-    )
+    print("Generating qualitative results...")
+    print("-" * 70)
 
-    print(
-        "Inference configuration:"
-    )
-    print(
-        f"  ROI size:         {roi_size}"
-    )
-    print(
-        f"  SW batch size:    {sw_batch_size}"
-    )
-    print(
-        f"  Overlap:          {overlap}"
-    )
-    print(
-        "  Target spacing:   native"
-    )
-    print(
-        "  N4 preprocessing: disabled"
-    )
-    print(
-        "  Spatial inversion: enabled"
-    )
+    print("Inference configuration:")
+    print(f"  ROI size:         {roi_size}")
+    print(f"  SW batch size:    {sw_batch_size}")
+    print(f"  Overlap:          {overlap}")
+    print("  Target spacing:   native")
+    print("  N4 preprocessing: disabled")
+    print("  Spatial inversion: enabled")
 
-    print(
-        "-" * 70
-    )
+    print("-" * 70)
 
     with torch.no_grad():
-
-        for index, batch in enumerate(
-            dataloader
-        ):
-
+        for index, batch in enumerate(dataloader):
             # -----------------------------------------------------
             # Subject ID and original reference MRI.
             # -----------------------------------------------------
 
-            subject_id, reference_path = (
-                get_subject_info_from_dataset(
-                    dataset=dataset,
-                    index=index,
-                )
+            subject_id, reference_path = get_subject_info_from_dataset(
+                dataset=dataset,
+                index=index,
             )
 
-            print(
-                f"Processing {subject_id}..."
-            )
+            print(f"Processing {subject_id}...")
 
             # -----------------------------------------------------
             # Move image to device.
@@ -850,11 +707,7 @@ def generate_visualizations(
             # which is exactly the space used for inference.
             # -----------------------------------------------------
 
-            label_np = remove_singleton_channel(
-                tensor_to_numpy(
-                    batch["label"]
-                )[0]
-            )
+            label_np = remove_singleton_channel(tensor_to_numpy(batch["label"])[0])
 
             # -----------------------------------------------------
             # Transformed MRI volume.
@@ -863,12 +716,7 @@ def generate_visualizations(
             # same preprocessed volume seen by the model.
             # -----------------------------------------------------
 
-            image_np = (
-                images[0, 0]
-                .detach()
-                .cpu()
-                .numpy()
-            )
+            image_np = images[0, 0].detach().cpu().numpy()
 
             # -----------------------------------------------------
             # Sliding-window inference.
@@ -898,52 +746,35 @@ def generate_visualizations(
             # validation space.
             # -----------------------------------------------------
 
-            transformed_prediction = (
-                prediction_labels
-                .detach()
-                .cpu()
-            )
+            transformed_prediction = prediction_labels.detach().cpu()
 
             print(
-                "  Transformed prediction shape: "
-                f"{tuple(transformed_prediction.shape)}"
+                f"  Transformed prediction shape: {tuple(transformed_prediction.shape)}"
             )
 
             # -----------------------------------------------------
             # Restore prediction to native image space.
             # -----------------------------------------------------
 
-            native_prediction = (
-                invert_prediction_to_native_space(
-                    prediction=transformed_prediction,
-                    batch=batch,
-                    validation_transforms=validation_transforms,
-                )
+            native_prediction = invert_prediction_to_native_space(
+                prediction=transformed_prediction,
+                batch=batch,
+                validation_transforms=validation_transforms,
             )
 
-            prediction_np = (
-                native_prediction[0]
-                .numpy()
-                .astype(np.uint8)
-            )
+            prediction_np = native_prediction[0].numpy().astype(np.uint8)
+
+            print(f"  Native prediction shape:      {prediction_np.shape}")
 
             print(
-                "  Native prediction shape:      "
-                f"{prediction_np.shape}"
-            )
-
-            print(
-                "  Reference MRI shape:          "
-                f"{nib.load(str(reference_path)).shape}"
+                f"  Reference MRI shape:          {nib.load(str(reference_path)).shape}"
             )
 
             # -----------------------------------------------------
             # Validate prediction labels.
             # -----------------------------------------------------
 
-            unique_labels = np.unique(
-                prediction_np
-            )
+            unique_labels = np.unique(prediction_np)
 
             if not np.all(
                 np.isin(
@@ -952,28 +783,18 @@ def generate_visualizations(
                 )
             ):
                 raise ValueError(
-                    f"{subject_id}: unexpected prediction labels: "
-                    f"{unique_labels}"
+                    f"{subject_id}: unexpected prediction labels: {unique_labels}"
                 )
 
-            print(
-                "  Prediction labels: "
-                f"{unique_labels.tolist()}"
-            )
+            print(f"  Prediction labels: {unique_labels.tolist()}")
 
             # -----------------------------------------------------
             # Save native-space prediction.
             # -----------------------------------------------------
 
-            subject_prediction_dir = (
-                prediction_dir
-                / subject_id
-            )
+            subject_prediction_dir = prediction_dir / subject_id
 
-            prediction_path = (
-                subject_prediction_dir
-                / "prediction.nii.gz"
-            )
+            prediction_path = subject_prediction_dir / "prediction.nii.gz"
 
             save_prediction_nifti(
                 prediction=prediction_np,
@@ -981,10 +802,7 @@ def generate_visualizations(
                 output_path=prediction_path,
             )
 
-            print(
-                f"  Saved prediction: "
-                f"{prediction_path}"
-            )
+            print(f"  Saved prediction: {prediction_path}")
 
             # -----------------------------------------------------
             # Generate qualitative figure.
@@ -997,15 +815,10 @@ def generate_visualizations(
             # -----------------------------------------------------
 
             transformed_prediction_np = (
-                transformed_prediction[0]
-                .numpy()
-                .astype(np.uint8)
+                transformed_prediction[0].numpy().astype(np.uint8)
             )
 
-            visualization_path = (
-                visualization_dir
-                / f"{subject_id}_prediction.png"
-            )
+            visualization_path = visualization_dir / f"{subject_id}_prediction.png"
 
             plot_prediction_comparison(
                 image=image_np,
@@ -1015,28 +828,17 @@ def generate_visualizations(
                 output_path=visualization_path,
             )
 
-            print(
-                f"  Saved visualization: "
-                f"{visualization_path}"
-            )
+            print(f"  Saved visualization: {visualization_path}")
 
             print()
 
-    print(
-        "-" * 70
-    )
+    print("-" * 70)
 
-    print(
-        "Qualitative evaluation complete."
-    )
+    print("Qualitative evaluation complete.")
 
     print()
-    print(
-        f"Predictions:     {prediction_dir}"
-    )
-    print(
-        f"Visualizations:  {visualization_dir}"
-    )
+    print(f"Predictions:     {prediction_dir}")
+    print(f"Visualizations:  {visualization_dir}")
 
 
 # ---------------------------------------------------------------------
@@ -1053,37 +855,25 @@ def main() -> None:
     # Select device.
     # -------------------------------------------------------------
 
-    device = torch.device(
-        "cuda"
-        if torch.cuda.is_available()
-        else "cpu"
-    )
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    print(
-        f"Using device: {device}"
-    )
+    print(f"Using device: {device}")
 
     # -------------------------------------------------------------
     # Load configuration.
     # -------------------------------------------------------------
 
-    config = load_config(
-        CONFIG_PATH
-    )
+    config = load_config(CONFIG_PATH)
 
     # -------------------------------------------------------------
     # Build data module.
     # -------------------------------------------------------------
 
-    data_module = build_datamodule(
-        config
-    )
+    data_module = build_datamodule(config)
 
     data_module.setup()
 
-    validation_loader = (
-        data_module.val_dataloader()
-    )
+    validation_loader = data_module.val_dataloader()
 
     # -------------------------------------------------------------
     # Get the exact validation transform used by the dataset.
@@ -1093,13 +883,9 @@ def main() -> None:
     # -------------------------------------------------------------
 
     if data_module.val_dataset is None:
-        raise RuntimeError(
-            "Validation dataset was not initialized."
-        )
+        raise RuntimeError("Validation dataset was not initialized.")
 
-    validation_transforms = (
-        data_module.val_dataset.transform
-    )
+    validation_transforms = data_module.val_dataset.transform
 
     if validation_transforms is None:
         raise RuntimeError(
@@ -1111,18 +897,11 @@ def main() -> None:
     # Verify validation dataset.
     # -------------------------------------------------------------
 
-    if len(
-        data_module.val_dataset.data
-    ) == 0:
-        raise RuntimeError(
-            "Validation dataset is empty."
-        )
+    if len(data_module.val_dataset.data) == 0:
+        raise RuntimeError("Validation dataset is empty.")
 
     print()
-    print(
-        "Validation subjects: "
-        f"{len(data_module.val_dataset.data)}"
-    )
+    print(f"Validation subjects: {len(data_module.val_dataset.data)}")
 
     # -------------------------------------------------------------
     # Build model.
@@ -1138,10 +917,7 @@ def main() -> None:
     # -------------------------------------------------------------
 
     print()
-    print(
-        f"Loading checkpoint: "
-        f"{CHECKPOINT_PATH}"
-    )
+    print(f"Loading checkpoint: {CHECKPOINT_PATH}")
 
     checkpoint = load_checkpoint(
         model=model,
@@ -1154,20 +930,12 @@ def main() -> None:
         "unknown",
     )
 
-    checkpoint_dice = checkpoint.get(
-        "val_mean_dice"
-    )
+    checkpoint_dice = checkpoint.get("val_mean_dice")
 
-    print(
-        f"Checkpoint epoch: "
-        f"{checkpoint_epoch}"
-    )
+    print(f"Checkpoint epoch: {checkpoint_epoch}")
 
     if checkpoint_dice is not None:
-        print(
-            "Checkpoint validation mean Dice: "
-            f"{float(checkpoint_dice):.4f}"
-        )
+        print(f"Checkpoint validation mean Dice: {float(checkpoint_dice):.4f}")
 
     # -------------------------------------------------------------
     # Verify selected checkpoint.
@@ -1201,25 +969,12 @@ def main() -> None:
         )
 
     print()
-    print(
-        "Selected model verified:"
-    )
-    print(
-        f"  Experiment:          {EXPECTED_EXPERIMENT}"
-    )
-    print(
-        "  Architecture:        Residual 3D U-Net"
-    )
-    print(
-        f"  Best epoch:          {EXPECTED_BEST_EPOCH}"
-    )
-    print(
-        "  Mean foreground Dice: "
-        f"{EXPECTED_BEST_DICE:.4f}"
-    )
-    print(
-        "  Preprocessing:       native spacing, no N4"
-    )
+    print("Selected model verified:")
+    print(f"  Experiment:          {EXPECTED_EXPERIMENT}")
+    print("  Architecture:        Residual 3D U-Net")
+    print(f"  Best epoch:          {EXPECTED_BEST_EPOCH}")
+    print(f"  Mean foreground Dice: {EXPECTED_BEST_DICE:.4f}")
+    print("  Preprocessing:       native spacing, no N4")
 
     # -------------------------------------------------------------
     # Inference configuration.

@@ -80,20 +80,14 @@ def dice_per_class(
 
     if target.ndim == 5:
         if target.shape[1] != 1:
-            raise ValueError(
-                "A 5D target must have exactly one channel."
-            )
+            raise ValueError("A 5D target must have exactly one channel.")
         target = target[:, 0]
 
     if prediction.shape[0] != target.shape[0]:
-        raise ValueError(
-            "Prediction and target batch sizes do not match."
-        )
+        raise ValueError("Prediction and target batch sizes do not match.")
 
     if prediction.shape[2:] != target.shape[1:]:
-        raise ValueError(
-            "Prediction and target spatial dimensions do not match."
-        )
+        raise ValueError("Prediction and target spatial dimensions do not match.")
 
     target = target.long()
 
@@ -108,17 +102,11 @@ def dice_per_class(
         predicted_mask = predicted_labels == class_index
         target_mask = target == class_index
 
-        intersection = (
-            predicted_mask & target_mask
-        ).sum(dtype=torch.float32)
+        intersection = (predicted_mask & target_mask).sum(dtype=torch.float32)
 
-        predicted_volume = predicted_mask.sum(
-            dtype=torch.float32
-        )
+        predicted_volume = predicted_mask.sum(dtype=torch.float32)
 
-        target_volume = target_mask.sum(
-            dtype=torch.float32
-        )
+        target_volume = target_mask.sum(dtype=torch.float32)
 
         denominator = predicted_volume + target_volume
 
@@ -127,8 +115,7 @@ def dice_per_class(
         # a perfect score rather than introducing NaN.
         dice = torch.where(
             denominator > 0,
-            (2.0 * intersection + smooth)
-            / (denominator + smooth),
+            (2.0 * intersection + smooth) / (denominator + smooth),
             torch.ones_like(denominator),
         )
 

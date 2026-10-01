@@ -16,7 +16,6 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Literal
 
-
 SplitName = Literal["train", "val", "test"]
 
 
@@ -50,9 +49,7 @@ def read_split_file(split_file: Path) -> list[str]:
     split_file = Path(split_file)
 
     if not split_file.exists():
-        raise FileNotFoundError(
-            f"Split file does not exist: {split_file}"
-        )
+        raise FileNotFoundError(f"Split file does not exist: {split_file}")
 
     subjects: list[str] = []
 
@@ -65,14 +62,10 @@ def read_split_file(split_file: Path) -> list[str]:
         subjects.append(line)
 
     if not subjects:
-        raise SplitError(
-            f"Split file is empty: {split_file}"
-        )
+        raise SplitError(f"Split file is empty: {split_file}")
 
     if len(subjects) != len(set(subjects)):
-        raise SplitError(
-            f"Duplicate subject IDs found in: {split_file}"
-        )
+        raise SplitError(f"Duplicate subject IDs found in: {split_file}")
 
     return subjects
 
@@ -138,9 +131,7 @@ def validate_splits(
     required_splits = {"train", "val", "test"}
 
     if set(splits) != required_splits:
-        raise SplitError(
-            "Splits must contain exactly: train, val, test"
-        )
+        raise SplitError("Splits must contain exactly: train, val, test")
 
     for split_name, expected_size in expected_sizes.items():
         actual_size = len(splits[split_name])
@@ -158,20 +149,16 @@ def validate_splits(
 
     if len(all_subjects) != len(set(all_subjects)):
         duplicates = {
-            subject
-            for subject in all_subjects
-            if all_subjects.count(subject) > 1
+            subject for subject in all_subjects if all_subjects.count(subject) > 1
         }
 
         raise SplitError(
-            f"Subject leakage detected between splits: "
-            f"{sorted(duplicates)}"
+            f"Subject leakage detected between splits: {sorted(duplicates)}"
         )
 
     if len(set(all_subjects)) != 18:
         raise SplitError(
-            f"Expected 18 unique IBSR subjects, "
-            f"found {len(set(all_subjects))}."
+            f"Expected 18 unique IBSR subjects, found {len(set(all_subjects))}."
         )
 
 
@@ -228,11 +215,7 @@ def print_split_summary(
     print("=" * 40)
 
     for split_name, subjects in splits.items():
-        print(
-            f"{split_name:>5}: "
-            f"{len(subjects):2d} subjects | "
-            f"{', '.join(subjects)}"
-        )
+        print(f"{split_name:>5}: {len(subjects):2d} subjects | {', '.join(subjects)}")
 
     print("=" * 40)
     print(f"Total: {len(get_all_subjects(splits_dir))} subjects")

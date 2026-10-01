@@ -30,7 +30,6 @@ from pathlib import Path
 import torch
 import yaml
 
-
 # ---------------------------------------------------------------------------
 # Project path setup
 # ---------------------------------------------------------------------------
@@ -46,7 +45,6 @@ if str(PROJECT_ROOT) not in sys.path:
 # ---------------------------------------------------------------------------
 
 from ibsr_unet.data.datamodule import IBSRDataModule  # noqa: E402
-
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -69,9 +67,7 @@ EXPECTED_TEST_SIZE = 3
 def load_config(config_path: Path) -> dict:
     """Load the YAML training configuration."""
     if not config_path.exists():
-        raise FileNotFoundError(
-            f"Configuration file not found: {config_path}"
-        )
+        raise FileNotFoundError(f"Configuration file not found: {config_path}")
 
     with config_path.open("r", encoding="utf-8") as file:
         config = yaml.safe_load(file)
@@ -91,9 +87,7 @@ def get_first_sample(sample):
     """
     if isinstance(sample, list):
         if len(sample) == 0:
-            raise RuntimeError(
-                "Training preprocessing returned an empty list."
-            )
+            raise RuntimeError("Training preprocessing returned an empty list.")
 
         return sample[0]
 
@@ -109,8 +103,7 @@ def check_sample(
 
     if not isinstance(sample, dict):
         raise TypeError(
-            f"{sample_name} must be a dictionary, "
-            f"got {type(sample).__name__}."
+            f"{sample_name} must be a dictionary, got {type(sample).__name__}."
         )
 
     if "image" not in sample:
@@ -135,14 +128,12 @@ def check_sample(
 
     if not isinstance(image, torch.Tensor):
         raise TypeError(
-            f"{sample_name} image must be a torch.Tensor, "
-            f"got {type(image).__name__}."
+            f"{sample_name} image must be a torch.Tensor, got {type(image).__name__}."
         )
 
     if not isinstance(label, torch.Tensor):
         raise TypeError(
-            f"{sample_name} label must be a torch.Tensor, "
-            f"got {type(label).__name__}."
+            f"{sample_name} label must be a torch.Tensor, got {type(label).__name__}."
         )
 
     # -----------------------------------------------------------------------
@@ -193,14 +184,12 @@ def check_sample(
 
     if image.dtype != torch.float32:
         raise AssertionError(
-            f"{sample_name} image should be float32, "
-            f"got {image.dtype}."
+            f"{sample_name} image should be float32, got {image.dtype}."
         )
 
     if label.dtype != torch.int64:
         raise AssertionError(
-            f"{sample_name} label should be int64/long, "
-            f"got {label.dtype}."
+            f"{sample_name} label should be int64/long, got {label.dtype}."
         )
 
     # -----------------------------------------------------------------------
@@ -273,9 +262,7 @@ def main() -> None:
     if not isinstance(training_config, dict):
         raise ValueError("'training' section must be a mapping.")
 
-    use_n4_bias_correction = bool(
-        data_config.get("use_n4_bias_correction", False)
-    )
+    use_n4_bias_correction = bool(data_config.get("use_n4_bias_correction", False))
 
     print(f"N4 bias correction: {use_n4_bias_correction}")
 
@@ -304,9 +291,7 @@ def main() -> None:
     # -----------------------------------------------------------------------
 
     if len(patch_size) != 3:
-        raise AssertionError(
-            f"patch_size must contain three values, got {patch_size}."
-        )
+        raise AssertionError(f"patch_size must contain three values, got {patch_size}.")
 
     if any(int(size) <= 0 for size in patch_size):
         raise AssertionError(
@@ -314,14 +299,10 @@ def main() -> None:
         )
 
     if batch_size < 1:
-        raise AssertionError(
-            f"batch_size must be >= 1, got {batch_size}."
-        )
+        raise AssertionError(f"batch_size must be >= 1, got {batch_size}.")
 
     if num_samples < 1:
-        raise AssertionError(
-            f"num_samples must be >= 1, got {num_samples}."
-        )
+        raise AssertionError(f"num_samples must be >= 1, got {num_samples}.")
 
     # -----------------------------------------------------------------------
     # Create data module

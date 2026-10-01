@@ -37,7 +37,6 @@ from typing import Any
 import numpy as np
 import SimpleITK as sitk
 import torch
-
 from monai.config import KeysCollection
 from monai.transforms import (
     Compose,
@@ -147,29 +146,19 @@ class N4BiasFieldCorrectiond(MapTransform):
         super().__init__(keys, allow_missing_keys)
 
         if shrink_factor < 1:
-            raise ValueError(
-                "shrink_factor must be >= 1."
-            )
+            raise ValueError("shrink_factor must be >= 1.")
 
         if not maximum_number_of_iterations:
-            raise ValueError(
-                "maximum_number_of_iterations must not be empty."
-            )
+            raise ValueError("maximum_number_of_iterations must not be empty.")
 
         if convergence_threshold <= 0:
-            raise ValueError(
-                "convergence_threshold must be > 0."
-            )
+            raise ValueError("convergence_threshold must be > 0.")
 
         if len(number_of_control_points) != 3:
-            raise ValueError(
-                "number_of_control_points must contain three values."
-            )
+            raise ValueError("number_of_control_points must contain three values.")
 
         self.shrink_factor = shrink_factor
-        self.maximum_number_of_iterations = (
-            maximum_number_of_iterations
-        )
+        self.maximum_number_of_iterations = maximum_number_of_iterations
         self.convergence_threshold = convergence_threshold
         self.number_of_control_points = number_of_control_points
 
@@ -240,23 +229,15 @@ class N4BiasFieldCorrectiond(MapTransform):
             restored = array[np.newaxis, ...]
 
         else:
-            raise ValueError(
-                f"Unknown layout: {layout}"
-            )
+            raise ValueError(f"Unknown layout: {layout}")
 
         if isinstance(reference, torch.Tensor):
-            tensor = torch.from_numpy(
-                np.ascontiguousarray(restored)
-            )
+            tensor = torch.from_numpy(np.ascontiguousarray(restored))
 
-            tensor = tensor.to(
-                device=reference.device
-            )
+            tensor = tensor.to(device=reference.device)
 
             if reference.dtype.is_floating_point:
-                tensor = tensor.to(
-                    dtype=reference.dtype
-                )
+                tensor = tensor.to(dtype=reference.dtype)
 
             return tensor
 
@@ -281,18 +262,12 @@ class N4BiasFieldCorrectiond(MapTransform):
         )
 
         # N4 operates on a SimpleITK image.
-        sitk_image = sitk.GetImageFromArray(
-            array
-        )
+        sitk_image = sitk.GetImageFromArray(array)
 
         # Use non-zero foreground as the N4 mask.
-        mask_array = (
-            array > 0
-        ).astype(np.uint8)
+        mask_array = (array > 0).astype(np.uint8)
 
-        sitk_mask = sitk.GetImageFromArray(
-            mask_array
-        )
+        sitk_mask = sitk.GetImageFromArray(mask_array)
 
         # If no foreground exists, leave the image unchanged.
         if not np.any(mask_array):
@@ -323,25 +298,13 @@ class N4BiasFieldCorrectiond(MapTransform):
             sitk.sitkUInt8,
         )
 
-        n4_filter = (
-            sitk.N4BiasFieldCorrectionImageFilter()
-        )
+        n4_filter = sitk.N4BiasFieldCorrectionImageFilter()
 
-        n4_filter.SetMaximumNumberOfIterations(
-            list(
-                self.maximum_number_of_iterations
-            )
-        )
+        n4_filter.SetMaximumNumberOfIterations(list(self.maximum_number_of_iterations))
 
-        n4_filter.SetConvergenceThreshold(
-            self.convergence_threshold
-        )
+        n4_filter.SetConvergenceThreshold(self.convergence_threshold)
 
-        n4_filter.SetNumberOfControlPoints(
-            list(
-                self.number_of_control_points
-            )
-        )
+        n4_filter.SetNumberOfControlPoints(list(self.number_of_control_points))
 
         corrected = n4_filter.Execute(
             sitk_image_shrunk,
@@ -358,11 +321,7 @@ class N4BiasFieldCorrectiond(MapTransform):
             sitk.sitkFloat32,
         )
 
-        corrected_array = (
-            sitk.GetArrayFromImage(
-                corrected
-            ).astype(np.float32)
-        )
+        corrected_array = sitk.GetArrayFromImage(corrected).astype(np.float32)
 
         return self._restore_layout(
             corrected_array,
@@ -377,9 +336,7 @@ class N4BiasFieldCorrectiond(MapTransform):
         d = dict(data)
 
         for key in self.key_iterator(d):
-            d[key] = self._apply_n4(
-                d[key]
-            )
+            d[key] = self._apply_n4(d[key])
 
         return d
 
@@ -432,14 +389,10 @@ def get_train_transforms(
     """
 
     if len(patch_size) != 3:
-        raise ValueError(
-            "patch_size must contain exactly three values."
-        )
+        raise ValueError("patch_size must contain exactly three values.")
 
     if num_samples < 1:
-        raise ValueError(
-            "num_samples must be >= 1."
-        )
+        raise ValueError("num_samples must be >= 1.")
 
     transforms: list[Any] = [
         # Load the NIfTI file and retain MONAI metadata.
@@ -447,13 +400,11 @@ def get_train_transforms(
             keys=["image", "label"],
             image_only=False,
         ),
-
         # Handles both raw IBSR [X,Y,Z,1] and precomputed
         # N4 [X,Y,Z] images.
         EnsureSingleChannelFirstd(
             keys=["image", "label"],
         ),
-
         # Standardize orientation.
         Orientationd(
             keys=["image", "label"],
@@ -464,9 +415,7 @@ def get_train_transforms(
     # Optional resampling.
     if target_spacing is not None:
         if len(target_spacing) != 3:
-            raise ValueError(
-                "target_spacing must contain exactly three values."
-            )
+            raise ValueError("target_spacing must contain exactly three values.")
 
         transforms.append(
             Spacingd(
@@ -502,13 +451,11 @@ def get_train_transforms(
                 nonzero=True,
                 channel_wise=False,
             ),
-
             # Remove empty background around the brain.
             CropForegroundd(
                 keys=["image", "label"],
                 source_key="image",
             ),
-
             # Sample fixed-size 3D training patches.
             RandSpatialCropSamplesd(
                 keys=["image", "label"],
@@ -516,26 +463,22 @@ def get_train_transforms(
                 num_samples=num_samples,
                 random_size=False,
             ),
-
             # Random left/right-style spatial flips.
             RandFlipd(
                 keys=["image", "label"],
                 prob=0.5,
                 spatial_axis=0,
             ),
-
             RandFlipd(
                 keys=["image", "label"],
                 prob=0.5,
                 spatial_axis=1,
             ),
-
             RandFlipd(
                 keys=["image", "label"],
                 prob=0.5,
                 spatial_axis=2,
             ),
-
             # Ensure final dtypes.
             EnsureTyped(
                 keys=["image", "label"],
@@ -570,11 +513,9 @@ def get_val_transforms(
             keys=["image", "label"],
             image_only=False,
         ),
-
         EnsureSingleChannelFirstd(
             keys=["image", "label"],
         ),
-
         Orientationd(
             keys=["image", "label"],
             axcodes="RAS",
@@ -583,9 +524,7 @@ def get_val_transforms(
 
     if target_spacing is not None:
         if len(target_spacing) != 3:
-            raise ValueError(
-                "target_spacing must contain exactly three values."
-            )
+            raise ValueError("target_spacing must contain exactly three values.")
 
         transforms.append(
             Spacingd(
@@ -613,12 +552,10 @@ def get_val_transforms(
                 nonzero=True,
                 channel_wise=False,
             ),
-
             CropForegroundd(
                 keys=["image", "label"],
                 source_key="image",
             ),
-
             EnsureTyped(
                 keys=["image", "label"],
                 dtype=(torch.float32, torch.int64),
@@ -645,11 +582,9 @@ def get_test_transforms(
             keys=["image"],
             image_only=False,
         ),
-
         EnsureSingleChannelFirstd(
             keys=["image"],
         ),
-
         Orientationd(
             keys=["image"],
             axcodes="RAS",
@@ -658,9 +593,7 @@ def get_test_transforms(
 
     if target_spacing is not None:
         if len(target_spacing) != 3:
-            raise ValueError(
-                "target_spacing must contain exactly three values."
-            )
+            raise ValueError("target_spacing must contain exactly three values.")
 
         transforms.append(
             Spacingd(
@@ -688,12 +621,10 @@ def get_test_transforms(
                 nonzero=True,
                 channel_wise=False,
             ),
-
             CropForegroundd(
                 keys=["image"],
                 source_key="image",
             ),
-
             EnsureTyped(
                 keys=["image"],
                 dtype=torch.float32,

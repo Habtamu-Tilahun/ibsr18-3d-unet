@@ -1,66 +1,82 @@
 # IBSR-18 3D U-Net Brain Tissue Segmentation
 
-A modular, reproducible deep-learning pipeline for **3D brain tissue segmentation on the IBSR-18 T1-weighted MRI dataset**, built with PyTorch and MONAI.
+A modular and reproducible deep-learning pipeline for **3D brain tissue segmentation on the IBSR-18 T1-weighted MRI dataset**, built with **PyTorch and MONAI**.
 
-The project combines **medical image analysis** with **research-quality software engineering**: reproducible data preparation, configurable experiments, preprocessing validation, 3D patch-based training, sliding-window inference, quantitative evaluation, native-space prediction restoration, automated quality control, testing, linting, and containerization.
+The project combines **medical image analysis** with **research-oriented software engineering**, including reproducible data preparation, configurable experiments, preprocessing validation, 3D patch-based training, sliding-window inference, quantitative evaluation, native-space prediction restoration, automated quality control, testing, linting, and containerization.
 
 ---
 
 ## Results at a glance
 
-The selected model is a **residual 3D U-Net** trained using **native voxel spacing without N4 bias-field correction**.
+The final selected model is a **residual 3D U-Net** trained at **native voxel spacing without N4 bias-field correction**.
 
-The final checkpoint was selected from a 400-epoch training run. Its best validation performance occurred at **epoch 391**.
+The model was trained for 400 epochs, with the best validation checkpoint selected at **epoch 391**.
 
-| Metric                   | Validation Dice |
-| ------------------------ | --------------: |
-| Background               |          0.9803 |
-| CSF                      |          0.8938 |
-| Gray matter              |          0.9340 |
-| White matter             |          0.9276 |
-| **Mean foreground Dice** |      **0.9185** |
+### Validation performance
+
+The training-selected checkpoint achieved the following validation Dice scores using the original sliding-window overlap of 0.25:
+
+| Metric | Dice |
+|---|---:|
+| Background | 0.9803 |
+| CSF | 0.8938 |
+| Gray matter | 0.9340 |
+| White matter | 0.9276 |
+| **Mean foreground Dice** | **0.9185** |
+
+The same checkpoint was subsequently evaluated using a sliding-window overlap of **0.50**. No model weights, architecture, preprocessing, or training procedure were changed.
+
+| Inference configuration | Background | CSF | GM | WM | Mean foreground Dice |
+|---|---:|---:|---:|---:|---:|
+| Overlap 0.25 | 0.9803 | 0.8938 | 0.9340 | 0.9276 | 0.9185 |
+| **Overlap 0.50** | **0.9805** | **0.8942** | **0.9344** | **0.9280** | **0.9188** |
+
+The increase from 0.9185 to 0.9188 is an **inference-level refinement**, not a change in the trained model.
 
 ### Training-duration study
 
-The same native-spacing residual 3D U-Net was progressively trained for longer durations because validation performance was still improving:
+The same native-spacing residual 3D U-Net was progressively trained for longer durations:
 
 | Training duration | Best validation mean foreground Dice | Best epoch |
-| ----------------: | -----------------------------------: | ---------: |
-|        100 epochs |                               0.8840 |         99 |
-|        200 epochs |                               0.9054 |        199 |
-|        300 epochs |                               0.9114 |        290 |
-|    **400 epochs** |                           **0.9185** |    **391** |
+|---:|---:|---:|
+| 100 epochs | 0.8840 | 99 |
+| 200 epochs | 0.9054 | 199 |
+| 300 epochs | 0.9114 | 290 |
+| **400 epochs** | **0.9185** | **391** |
 
-This progression shows that a substantial portion of the improvement came from allowing the same architecture to continue learning rather than introducing increasingly complex preprocessing.
+This experiment showed that continued optimization of the same architecture produced substantial improvements over shorter training runs.
 
 ### Controlled experiment comparison
 
-| Experiment                      | Architecture          | Spacing        | N4     | Mean foreground Dice |
-| ------------------------------- | --------------------- | -------------- | ------ | -------------------: |
-| Native baseline — 100 epochs    | Residual 3D U-Net     | Native         | No     |               0.8840 |
-| Native — 200 epochs             | Residual 3D U-Net     | Native         | No     |               0.9054 |
-| Native — 300 epochs             | Residual 3D U-Net     | Native         | No     |               0.9114 |
-| **Native — 400 epochs (final)** | **Residual 3D U-Net** | **Native**     | **No** |           **0.9185** |
-| 1 mm isotropic                  | Residual 3D U-Net     | 1 mm isotropic | No     |               0.8748 |
-| Conventional U-Net              | Conventional 3D U-Net | Native         | No     |               0.8493 |
-| N4 preprocessing                | Residual 3D U-Net     | Native         | Yes    |               0.8777 |
+| Experiment | Architecture | Spacing | N4 | Mean foreground Dice |
+|---|---|---|---|---:|
+| Native baseline — 100 epochs | Residual 3D U-Net | Native | No | 0.8840 |
+| Native — 200 epochs | Residual 3D U-Net | Native | No | 0.9054 |
+| Native — 300 epochs | Residual 3D U-Net | Native | No | 0.9114 |
+| **Native — 400 epochs** | **Residual 3D U-Net** | **Native** | **No** | **0.9185** |
+| 1 mm isotropic | Residual 3D U-Net | 1 mm isotropic | No | 0.8748 |
+| Conventional U-Net | Conventional 3D U-Net | Native | No | 0.8493 |
+| N4 preprocessing | Residual 3D U-Net | Native | Yes | 0.8777 |
+| CSF-weighted loss | Residual 3D U-Net | Native | No | 0.9167 |
 
-The experiments indicate that **residual connections and sufficient training duration were more beneficial than the evaluated 1 mm isotropic resampling or N4 preprocessing configurations**. The final model therefore uses native voxel spacing and no N4 correction.
+These controlled experiments document the effect of training duration, architecture, voxel spacing, N4 preprocessing, and class weighting under the evaluated configurations.
 
 ---
 
 ## Project overview
 
-Brain tissue segmentation assigns each voxel to anatomical tissue classes. In this project, the target classes are:
+Brain tissue segmentation assigns each voxel of a brain MRI volume to an anatomical tissue class.
 
-* **0 — Background**
-* **1 — Cerebrospinal fluid (CSF)**
-* **2 — Gray matter (GM)**
-* **3 — White matter (WM)**
+This project predicts four classes:
+
+| Label | Class |
+|---:|---|
+| 0 | Background |
+| 1 | Cerebrospinal fluid (CSF) |
+| 2 | Gray matter (GM) |
+| 3 | White matter (WM) |
 
 The pipeline operates directly on 3D MRI volumes and uses patch-based training to accommodate the memory requirements of volumetric neural networks.
-
-The project was designed as a complete research workflow rather than a single training script:
 
 ```text
 MRI volumes
@@ -93,7 +109,12 @@ Native-space reconstruction
     │
     ▼
 NIfTI segmentation
+    │
+    ▼
+Automated QC + qualitative inspection
 ```
+
+The project was designed as a complete research workflow rather than a single training script.
 
 ---
 
@@ -103,50 +124,56 @@ The project uses the **IBSR-18 T1-weighted brain MRI dataset**.
 
 ### Dataset splits
 
-| Split      | Subjects                                                                                 |
-| ---------- | ---------------------------------------------------------------------------------------- |
-| Training   | IBSR_01, IBSR_03, IBSR_04, IBSR_05, IBSR_06, IBSR_07, IBSR_08, IBSR_09, IBSR_16, IBSR_18 |
-| Validation | IBSR_11, IBSR_12, IBSR_13, IBSR_14, IBSR_17                                              |
-| Test       | IBSR_02, IBSR_10, IBSR_15                                                                |
+| Split | Subjects |
+|---|---|
+| Training | IBSR_01, IBSR_03, IBSR_04, IBSR_05, IBSR_06, IBSR_07, IBSR_08, IBSR_09, IBSR_16, IBSR_18 |
+| Validation | IBSR_11, IBSR_12, IBSR_13, IBSR_14, IBSR_17 |
+| Test | IBSR_02, IBSR_10, IBSR_15 |
 
-The test subjects do not contain ground-truth segmentations in this project configuration. Consequently, quantitative Dice evaluation is performed on the validation set, while the test set is used for **unseen-subject inference and qualitative generalization assessment**.
+The test subjects do not contain ground-truth segmentations in this project configuration. Therefore:
+
+- quantitative Dice evaluation is performed on the validation set;
+- the test split is used for unseen-subject inference;
+- test predictions are assessed through geometry checks and qualitative inspection;
+- test Dice is **not reported**.
 
 ### Label mapping
 
-| Label | Tissue       |
-| ----: | ------------ |
-|     0 | Background   |
-|     1 | CSF          |
-|     2 | Gray matter  |
-|     3 | White matter |
+| Label | Tissue |
+|---:|---|
+| 0 | Background |
+| 1 | CSF |
+| 2 | Gray matter |
+| 3 | White matter |
 
 The primary evaluation metric is **mean foreground Dice**, calculated across CSF, GM, and WM:
 
-```math
-\frac{\mathrm{Dice}_{CSF} + \mathrm{Dice}_{GM} + \mathrm{Dice}_{WM}}{3}
+```text
+Mean foreground Dice =
+    (Dice_CSF + Dice_GM + Dice_WM) / 3
 ```
 
 ---
 
 ## Model
 
-The final model is a **3D U-Net with two residual units per convolutional block**.
-
-The architecture was selected through a controlled comparison against a conventional U-Net without residual units.
+The final model is a **3D U-Net with residual units** implemented using MONAI.
 
 ### Final configuration
 
-* Architecture: Residual 3D U-Net
-* Residual units: 2
-* Input: 3D T1-weighted MRI
-* Output classes: 4
-* Loss: Dice + cross-entropy
-* Patch size: `96 × 96 × 96`
-* Batch size: 1
-* Native voxel spacing
-* N4 bias correction: disabled
-* Sliding-window inference
-* Gaussian blending during inference
+- Architecture: Residual 3D U-Net
+- Input channels: 1
+- Output classes: 4
+- Residual units: 2
+- Channels: `[16, 32, 64, 128, 256]`
+- Patch size: `96 × 96 × 96`
+- Batch size: 1
+- Loss: Dice + cross-entropy
+- Voxel spacing: Native
+- N4 bias correction: Disabled
+- Sliding-window inference
+- Gaussian blending
+- Final validation overlap: `0.50`
 
 The final checkpoint is:
 
@@ -172,11 +199,9 @@ The validation and inference pipeline includes:
 
 Training additionally uses randomized 3D patch sampling and data augmentation.
 
-The final selected configuration deliberately preserves **native voxel spacing**, because resampling to 1 mm isotropic spacing produced lower validation performance.
+The final configuration preserves **native voxel spacing**. A controlled 1 mm isotropic experiment produced lower validation performance than the native-spacing configuration.
 
-### Native-spacing design choice
-
-The native-spacing configuration was investigated progressively:
+### Native-spacing training progression
 
 ```text
 100 epochs  → 0.8840
@@ -185,7 +210,7 @@ The native-spacing configuration was investigated progressively:
 400 epochs  → 0.9185
 ```
 
-The best validation score in the 400-epoch run occurred at epoch 391, after which the validation score fluctuated below the best checkpoint.
+The best validation result in the 400-epoch run occurred at epoch 391.
 
 ---
 
@@ -193,81 +218,130 @@ The best validation score in the 400-epoch run occurred at epoch 391, after whic
 
 MRI intensity inhomogeneity was investigated using a precomputed N4 bias-field correction pipeline.
 
-The finalized preprocessing configuration used:
+The evaluated N4 configuration used:
 
-* SimpleITK N4BiasFieldCorrection
-* Shrink factor: `4`
-* Maximum iterations: `[50, 50, 50, 50]`
-* Convergence threshold: `0.001`
-* B-spline control points: `[4, 4, 4]`
-* Foreground mask: `image > 0`
+- SimpleITK N4BiasFieldCorrection
+- Shrink factor: `4`
+- Maximum iterations: `[50, 50, 50, 50]`
+- Convergence threshold: `0.001`
+- B-spline control points: `[4, 4, 4]`
+- Foreground mask: `image > 0`
 
 All **18 IBSR-18 subjects passed automated N4 preprocessing QC**, including geometry preservation, finite-value checks, reconstruction consistency, and bias-field smoothness checks.
 
-However, N4 correction achieved a mean foreground Dice of **0.8777**, compared with **0.9185** for the final native/no-N4 model. It was therefore not included in the final inference pipeline.
+The N4 experiment achieved a mean foreground Dice of **0.8777**, compared with **0.9185** for the selected native-spacing/no-N4 configuration.
 
-More details are available in [`docs/experiments.md`](docs/experiments.md).
+N4 preprocessing was therefore not included in the final model pipeline.
+
+Detailed experiment results are documented in [`docs/experiments.md`](docs/experiments.md).
 
 ---
 
 ## Quantitative validation
 
-The final epoch-391 checkpoint was independently evaluated on the five held-out validation subjects.
+The epoch-391 checkpoint was evaluated on the five held-out validation subjects.
 
-| Subject       |   CSF Dice |    GM Dice |    WM Dice |
-| ------------- | ---------: | ---------: | ---------: |
-| IBSR_11       |     0.8819 |     0.9338 |     0.9443 |
-| IBSR_12       |     0.8886 |     0.9187 |     0.9267 |
-| IBSR_13       |     0.8655 |     0.9326 |     0.9051 |
-| IBSR_14       |     0.9113 |     0.9446 |     0.9374 |
-| IBSR_17       |     0.9217 |     0.9404 |     0.9245 |
+### Validation results — overlap 0.25
+
+| Subject | CSF Dice | GM Dice | WM Dice |
+|---|---:|---:|---:|
+| IBSR_11 | 0.8819 | 0.9338 | 0.9443 |
+| IBSR_12 | 0.8886 | 0.9187 | 0.9267 |
+| IBSR_13 | 0.8655 | 0.9326 | 0.9051 |
+| IBSR_14 | 0.9113 | 0.9446 | 0.9374 |
+| IBSR_17 | 0.9217 | 0.9404 | 0.9245 |
 | **Aggregate** | **0.8938** | **0.9340** | **0.9276** |
 
-Overall validation performance:
+Overall:
 
-| Metric              |       Dice |
-| ------------------- | ---------: |
-| Background          |     0.9803 |
-| CSF                 |     0.8938 |
-| GM                  |     0.9340 |
-| WM                  |     0.9276 |
+| Metric | Dice |
+|---|---:|
+| Background | 0.9803 |
+| CSF | 0.8938 |
+| GM | 0.9340 |
+| WM | 0.9276 |
 | **Mean foreground** | **0.9185** |
 
-The model performs strongly across GM and WM while CSF remains the most challenging foreground class. This is expected to some extent because CSF includes relatively small structures and thin sulcal regions that are more difficult to delineate consistently.
+### Inference-overlap experiment
+
+The same epoch-391 checkpoint was evaluated again using a sliding-window overlap of `0.50`.
+
+This was an **inference-only experiment**. Model weights, training data, architecture, preprocessing, and checkpoint were unchanged.
+
+| Subject | Background | CSF Dice | GM Dice | WM Dice |
+|---|---:|---:|---:|---:|
+| IBSR_11 | 0.9820 | 0.8819 | 0.9338 | 0.9443 |
+| IBSR_12 | 0.9737 | 0.8886 | 0.9187 | 0.9267 |
+| IBSR_13 | 0.9810 | 0.8655 | 0.9326 | 0.9051 |
+| IBSR_14 | 0.9843 | 0.9113 | 0.9446 | 0.9374 |
+| IBSR_17 | 0.9816 | 0.9235 | 0.9424 | 0.9263 |
+| **Aggregate** | **0.9805** | **0.8942** | **0.9344** | **0.9280** |
+
+The resulting mean foreground Dice was:
+
+```text
+Overlap 0.25 → 0.9185
+Overlap 0.50 → 0.9188
+
+Δ mean foreground Dice = +0.0003
+```
+
+The class-wise changes were:
+
+```text
+CSF → +0.0004
+GM  → +0.0004
+WM  → +0.0004
+```
+
+The final inference configuration therefore uses **0.50 sliding-window overlap**.
+
+Because the improvement is small, it should be interpreted as an inference-level refinement rather than a substantive change in model capability.
 
 ---
 
-## Training behavior
+## CSF-weighted loss experiment
 
-The final training run used 400 epochs. The best validation result occurred at **epoch 391**:
+CSF was the lowest-performing foreground class in the baseline evaluation, so a controlled class-weighting experiment was performed.
 
-```text
-Epoch 391/400
-train_loss = 0.2335
-val_loss   = 0.2027
+The experiment preserved:
 
-CSF Dice = 0.8938
-GM Dice  = 0.9340
-WM Dice  = 0.9276
+- Residual 3D U-Net
+- Native voxel spacing
+- No N4 correction
+- `96 × 96 × 96` patches
+- Batch size 1
+- 400 training epochs
 
-Mean foreground Dice = 0.9185
-```
-
-The following epochs did not surpass this checkpoint:
+The evaluated class weights were:
 
 ```text
-Epoch 392 → 0.9128
-Epoch 393 → 0.9134
-Epoch 394 → 0.9131
-Epoch 395 → 0.9131
-Epoch 396 → 0.9093
-Epoch 397 → 0.9085
-Epoch 398 → 0.9140
-Epoch 399 → 0.9057
-Epoch 400 → 0.9142
+Background = 1.0
+CSF        = 1.5
+GM         = 1.0
+WM         = 1.0
 ```
 
-Therefore, **epoch 391** was retained as the final model rather than the final training epoch.
+The best weighted checkpoint occurred at **epoch 371**.
+
+| Metric | Baseline | CSF-weighted | Difference |
+|---|---:|---:|---:|
+| CSF | 0.8938 | **0.8953** | +0.0015 |
+| GM | 0.9340 | 0.9315 | -0.0025 |
+| WM | 0.9276 | 0.9233 | -0.0043 |
+| **Mean foreground** | **0.9185** | 0.9167 | **-0.0018** |
+
+The weighting increased CSF Dice slightly but reduced GM and WM Dice, resulting in a lower mean foreground Dice.
+
+The weighted checkpoint is retained separately:
+
+```text
+outputs/experiments/csf_weighted/checkpoints/best_model.pt
+```
+
+It was **not selected as the final model**.
+
+This experiment is retained as a controlled negative result demonstrating that increasing the CSF loss contribution alone did not improve the primary evaluation metric under the tested configuration.
 
 ---
 
@@ -275,18 +349,21 @@ Therefore, **epoch 391** was retained as the final model rather than the final t
 
 The final checkpoint was applied to the three unseen test subjects:
 
-* IBSR_02
-* IBSR_10
-* IBSR_15
+- IBSR_02
+- IBSR_10
+- IBSR_15
 
-Predictions are generated using 3D sliding-window inference with:
+The final inference protocol is:
 
-* ROI size: `96 × 96 × 96`
-* Sliding-window batch size: `1`
-* Overlap: `0.25`
-* Gaussian blending
+- ROI size: `96 × 96 × 96`
+- Sliding-window batch size: `1`
+- Overlap: `0.50`
+- Gaussian blending
+- No N4 correction
+- No test-time augmentation
+- Epoch-391 checkpoint
 
-Predictions are then restored from the foreground-cropped representation to the **original native image space** using the preprocessing metadata recorded by MONAI.
+Predictions are restored from the foreground-cropped representation to the **original native image space** using the preprocessing metadata recorded during inference.
 
 Generated predictions:
 
@@ -304,46 +381,124 @@ outputs/
 
 ### Native-space sanity checks
 
-All three test predictions passed:
+The test prediction QC verifies:
 
-* native spatial-shape verification
-* affine consistency with the source MRI
-* finite-value checks
-* valid label verification
-* non-empty foreground verification
-* `uint8` output verification
+- native spatial shape
+- affine consistency with the source MRI
+- finite values
+- valid labels `[0, 1, 2, 3]`
+- non-empty foreground
+- output dtype
+- voxel-level prediction statistics
+- connected-component structure
+- slice continuity
 
-The predictions therefore have valid native-space geometry and can be directly used as NIfTI segmentation outputs.
+The automated QC treats MRI foreground containment as a **diagnostic check rather than a brain-mask ground truth**, because non-zero MRI voxels are not equivalent to a true anatomical brain mask.
 
-Because the test split has no ground-truth segmentations in this project configuration, **test Dice is not reported**.
+Because the test split has no ground-truth segmentations, **test Dice is not reported**.
 
 ---
 
 ## Qualitative test assessment
 
-Qualitative inspection was performed in axial, coronal, and sagittal views.
+Qualitative inspection was performed using axial, coronal, and sagittal views of the unseen test subjects.
+
+The predictions show broadly plausible whole-brain tissue organization, including cortical coverage, major ventricular CSF spaces, central white matter, and inferior brain structures.
+
+The main recurring limitation is **coarse GM/WM boundary delineation**, particularly around cortical regions and smaller CSF spaces.
 
 ### IBSR_02
 
-The segmentation is generally anatomically plausible, with continuous cortical coverage and recognizable GM/WM organization. A disconnected inferior WM prediction was observed in the coronal view and is considered a false-positive region.
+The prediction shows:
+
+- broad whole-brain coverage;
+- recognizable cortical GM;
+- organized deep WM;
+- plausible major ventricular CSF;
+- reasonable preservation of large CSF spaces.
+
+The GM/WM interface is relatively coarse in places, and small sulci are simplified.
+
+A disconnected inferior WM component was observed during QC. Subsequent anatomical inspection indicated that disconnected WM regions should not automatically be treated as false positives: some have coherent anatomical locations and may represent legitimate inferior or cerebellar white matter.
 
 ### IBSR_10
 
-IBSR_10 produced the strongest qualitative result among the three test subjects. Cortical coverage is continuous, GM/WM boundaries are relatively detailed, and ventricular CSF is well represented. No obvious disconnected components were observed in the inspected views.
+IBSR_10 shows relatively stable whole-brain organization:
+
+- continuous cortical coverage;
+- recognizable GM/WM organization;
+- clear ventricular CSF;
+- coherent central white matter;
+- no obvious large off-brain prediction.
+
+Small isolated regions remain candidates for further 3D inspection, but no major sliding-window seams were observed.
 
 ### IBSR_15
 
-IBSR_15 was more challenging. Qualitative limitations included:
+IBSR_15 was more challenging and showed:
 
-* comparatively coarse WM regions
-* apparent WM over-segmentation
-* under-segmentation of ventricular CSF
-* a localized cortical coverage gap
-* small off-brain prediction islands
+- coarser GM/WM boundaries;
+- subject-dependent variation in WM segmentation;
+- simplified small CSF spaces;
+- several disconnected WM components requiring anatomical review.
 
-These observations illustrate subject-dependent generalization limitations despite the strong aggregate validation score.
+One larger disconnected WM component contained approximately 38,851 voxels and was localized to an inferior/posterior anatomical region. Its location, continuity, and surrounding tissue were more consistent with a structured anatomical region than random prediction noise.
 
-No obvious rectangular or grid-like seams attributable to sliding-window inference were observed.
+A smaller 540-voxel WM component was also investigated. It was elongated and spatially structured, but its connectivity to the main WM component remained uncertain.
+
+These observations demonstrate why automated connected-component removal was **not** applied blindly: a disconnected component is not necessarily a segmentation error.
+
+### Overall qualitative assessment
+
+Across the three unseen subjects:
+
+- large-scale brain coverage is generally plausible;
+- cortical GM coverage is broadly preserved;
+- major ventricular CSF structures are recognizable;
+- GM/WM organization is generally coherent;
+- fine cortical GM/WM boundaries remain a limitation;
+- small sulci and CSF spaces are simplified;
+- some disconnected components require anatomical review;
+- no obvious large sliding-window grid artifacts were observed.
+
+Qualitative inspection is supportive but does not replace quantitative evaluation against ground truth.
+
+---
+
+## Test prediction QC
+
+The repository includes automated checks for generated test predictions.
+
+The QC pipeline examines:
+
+```text
+Geometry
+├── native shape
+├── affine consistency
+└── voxel spacing
+
+Numerical validity
+├── finite values
+├── valid class labels
+└── expected output dtype
+
+Segmentation structure
+├── foreground volume
+├── class volumes
+├── connected components
+└── slice continuity
+
+MRI relationship
+└── prediction voxels relative to non-zero MRI foreground
+```
+
+The output is written to:
+
+```text
+outputs/qc/test_prediction_qc.csv
+```
+
+The QC report is intended as a **sanity-checking and diagnostic tool**, not as a substitute for ground-truth evaluation.
 
 ---
 
@@ -368,16 +523,16 @@ ibsr18-3d-unet/
 │   ├── architecture.md
 │   └── experiments.md
 │
-├── notebooks/
-│   ├── 01_data_exploration.ipynb
-│   └── 02_results_visualization.ipynb
-│
 ├── scripts/
 │   ├── prepare_data.py
 │   ├── analyze_labels.py
 │   ├── precompute_n4.py
+│   ├── qc_n4.py
+│   ├── smoke_test_n4.py
+│   ├── smoke_test_experiment4.py
 │   ├── train.py
 │   ├── evaluate.py
+│   ├── predict.py
 │   ├── predict_test.py
 │   ├── visualize_predictions.py
 │   ├── visualize_test_predictions.py
@@ -442,7 +597,22 @@ configs/
 └── finetune.yaml
 ```
 
-This keeps model, data, optimization, and preprocessing settings separate from the implementation.
+The main configuration separates:
+
+- dataset paths;
+- preprocessing;
+- patch size;
+- model architecture;
+- optimization;
+- loss configuration;
+- inference settings;
+- output locations.
+
+The final baseline configuration is stored in:
+
+```text
+configs/train.yaml
+```
 
 ---
 
@@ -460,17 +630,33 @@ Checkpoints and training outputs are written under:
 outputs/
 ```
 
+The final selected checkpoint is:
+
+```text
+outputs/checkpoints/best_model.pt
+```
+
 ---
 
 ## Evaluation
 
-Validation evaluation:
+Validation evaluation can be run with:
 
 ```bash
 python scripts/evaluate.py
 ```
 
 The evaluation pipeline reports per-class Dice scores and mean foreground Dice.
+
+To evaluate a specific checkpoint:
+
+```bash
+python scripts/evaluate.py \
+    --config configs/train.yaml \
+    --checkpoint outputs/checkpoints/best_model.pt
+```
+
+The final reported validation configuration uses a sliding-window overlap of `0.50`.
 
 ---
 
@@ -482,7 +668,7 @@ Generate predictions for the three test subjects:
 python scripts/predict_test.py
 ```
 
-Then run native-space sanity checks:
+Then run prediction sanity checks:
 
 ```bash
 python scripts/check_test_predictions.py
@@ -498,50 +684,74 @@ python scripts/visualize_test_predictions.py
 
 ## Testing and code quality
 
-Run the unit tests with:
+Install development dependencies:
+
+```bash
+pip install -e ".[dev]"
+```
+
+Run the unit tests:
 
 ```bash
 python -m pytest
 ```
 
-Run Ruff on the maintained inference and visualization scripts:
+Run Ruff:
 
 ```bash
-ruff check \
-    scripts/check_test_predictions.py \
-    scripts/predict_test.py \
-    scripts/visualize_test_predictions.py \
-    scripts/visualize_predictions.py
+ruff check .
+```
+
+Run pre-commit hooks:
+
+```bash
+pre-commit run --all-files
 ```
 
 The repository also includes:
 
-* GitHub Actions CI
-* Ruff linting
-* pre-commit hooks
-* Docker support
+- GitHub Actions CI
+- Ruff linting
+- pre-commit hooks
+- Docker support
+- unit tests
 
 ---
 
 ## Reproducibility and engineering practices
 
-The repository includes:
+The repository is structured around reproducible research and maintainable scientific software.
 
-* configurable YAML experiments
-* deterministic/reproducibility utilities
-* modular dataset and transformation components
-* separate training and inference pipelines
-* unit tests
-* Ruff linting
-* pre-commit hooks
-* GitHub Actions CI
-* Docker support
-* structured logging
-* native-space NIfTI reconstruction
-* automated preprocessing QC
-* checkpoint-based model selection
+Key practices include:
 
-The goal is to make the project reproducible and maintainable rather than tying the workflow to a single notebook or training script.
+- configurable YAML experiments;
+- fixed random seeds;
+- reproducibility utilities;
+- modular dataset and transformation components;
+- separate training and inference pipelines;
+- checkpoint-based model selection;
+- unit tests;
+- automated linting;
+- pre-commit hooks;
+- GitHub Actions CI;
+- Docker support;
+- structured logging;
+- native-space NIfTI reconstruction;
+- automated preprocessing QC;
+- automated prediction sanity checks;
+- documented positive and negative experiments.
+
+The goal is to make the workflow reproducible and maintainable rather than tying the project to a single notebook or training script.
+
+---
+
+## Documentation
+
+More detailed technical documentation is available in:
+
+- [`docs/architecture.md`](docs/architecture.md) — model architecture, data flow, preprocessing, inference, QC, and software design.
+- [`docs/experiments.md`](docs/experiments.md) — controlled experiments, ablations, validation results, TTA evaluation, and interpretation of experimental findings.
+- `data/README.md` — dataset organization and preparation.
 
 ---
 
@@ -549,23 +759,28 @@ The goal is to make the project reproducible and maintainable rather than tying 
 
 Several limitations should be considered when interpreting the results:
 
-1. The dataset is small, with only 18 subjects.
+1. The dataset contains only 18 subjects.
 2. The public test split used here does not provide ground-truth labels, preventing quantitative test evaluation.
-3. The validation set contains only five subjects, so the reported validation score should not be interpreted as a broad estimate of clinical performance.
-4. Qualitative inspection identified subject-dependent failure modes, particularly for CSF delineation and GM/WM boundaries.
-5. Some isolated off-brain predictions remain in difficult test cases.
-6. The model was evaluated on IBSR-18 and should not be assumed to generalize directly to other scanners, acquisition protocols, datasets, or clinical populations.
-7. The final checkpoint was selected using the held-out validation set; an external dataset would be required for a stronger assessment of generalization.
+3. The validation set contains only five subjects, so the validation score should not be interpreted as a broad estimate of clinical performance.
+4. Qualitative inspection identified subject-dependent limitations, particularly around fine GM/WM boundaries and small CSF structures.
+5. Some disconnected prediction components occur in difficult test cases and require anatomical interpretation rather than automatic removal.
+6. MRI foreground containment checks use non-zero image voxels as a conservative proxy and should not be interpreted as a true anatomical brain mask.
+7. The model was evaluated on IBSR-18 and should not be assumed to generalize directly to other scanners, acquisition protocols, datasets, or clinical populations.
+8. The final checkpoint was selected using the held-out validation set. Evaluation on an independent external dataset would provide a stronger assessment of generalization.
+9. The 0.50 sliding-window overlap experiment produced only a small improvement over 0.25.
+10. The CSF-weighted loss experiment slightly improved CSF Dice but reduced GM, WM, and overall mean foreground Dice under the tested configuration.
 
 ---
 
 ## Conclusion
 
-This project demonstrates a complete 3D medical image segmentation workflow, from dataset validation and controlled preprocessing experiments through training, quantitative validation, native-space inference, automated prediction checks, and qualitative assessment.
+This project demonstrates an end-to-end workflow for **3D medical image segmentation**, covering dataset validation, controlled preprocessing experiments, model development, training, checkpoint selection, quantitative validation, native-space inference, automated QC, and qualitative assessment.
 
-The final model is a **residual 3D U-Net operating at native voxel spacing without N4 bias-field correction**.
+The selected model is a:
 
-Through progressively longer training runs, the validation mean foreground Dice improved from:
+> **Residual 3D U-Net operating at native voxel spacing without N4 bias-field correction.**
+
+The progressively longer training experiments produced:
 
 ```text
 100 epochs  → 0.8840
@@ -574,6 +789,38 @@ Through progressively longer training runs, the validation mean foreground Dice 
 400 epochs  → 0.9185
 ```
 
-The final selected checkpoint achieved a **mean foreground Dice of 0.9185 at epoch 391**, with class-wise Dice scores of **0.8938 for CSF, 0.9340 for GM, and 0.9276 for WM**.
+The final selected checkpoint was **epoch 391**, with:
 
-The project demonstrates not only a strong segmentation result on IBSR-18, but also an end-to-end approach to **reproducible medical AI research and maintainable scientific software engineering**.
+```text
+CSF Dice = 0.8938
+GM Dice  = 0.9340
+WM Dice  = 0.9276
+
+Mean foreground Dice = 0.9185
+```
+
+Using the same checkpoint with sliding-window overlap increased from 0.25 to 0.50 produced:
+
+```text
+Mean foreground Dice = 0.9188
+Δ = +0.0003
+```
+
+The CSF-weighted experiment reached:
+
+```text
+CSF Dice              = 0.8953
+GM Dice               = 0.9315
+WM Dice               = 0.9233
+Mean foreground Dice  = 0.9167
+```
+
+and was therefore retained as a controlled experiment rather than the final model.
+
+The project emphasizes not only segmentation performance, but also **controlled experimentation, reproducibility, software quality, quantitative validation, diagnostic QC, and careful interpretation of model predictions**.
+
+---
+
+## License
+
+See [`LICENSE`](LICENSE).

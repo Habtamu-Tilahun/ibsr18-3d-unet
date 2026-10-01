@@ -19,8 +19,9 @@ volume to fit into GPU memory at once.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import torch
 from torch import Tensor, nn
@@ -28,7 +29,6 @@ from torch.optim import Optimizer
 from torch.utils.data import DataLoader
 
 from ibsr_unet.inference import sliding_window_predict
-
 
 MetricFn = Callable[[Tensor, Tensor], Tensor]
 
@@ -186,9 +186,7 @@ class Trainer:
             num_batches += 1
 
         if num_batches == 0:
-            raise RuntimeError(
-                "Training DataLoader produced no batches."
-            )
+            raise RuntimeError("Training DataLoader produced no batches.")
 
         return running_loss / num_batches
 
@@ -289,9 +287,7 @@ class Trainer:
             num_batches += 1
 
         if num_batches == 0:
-            raise RuntimeError(
-                "Validation DataLoader produced no batches."
-            )
+            raise RuntimeError("Validation DataLoader produced no batches.")
 
         val_loss = running_loss / num_batches
 
@@ -374,16 +370,12 @@ class Trainer:
             # ---------------------------------------------------------
             # Training
             # ---------------------------------------------------------
-            train_loss = self.train_one_epoch(
-                train_loader
-            )
+            train_loss = self.train_one_epoch(train_loader)
 
             # ---------------------------------------------------------
             # Validation
             # ---------------------------------------------------------
-            val_loss, val_per_class_dice = self.validate(
-                val_loader
-            )
+            val_loss, val_per_class_dice = self.validate(val_loader)
 
             # ---------------------------------------------------------
             # Calculate mean foreground Dice.
@@ -398,7 +390,6 @@ class Trainer:
             # Background is excluded from the mean.
             # ---------------------------------------------------------
             if val_per_class_dice is not None:
-
                 if val_per_class_dice.ndim == 0:
                     # Support scalar metrics for Trainer reuse.
                     val_mean_dice = val_per_class_dice.item()
@@ -409,11 +400,7 @@ class Trainer:
                             "one foreground class."
                         )
 
-                    val_mean_dice = (
-                        val_per_class_dice[1:]
-                        .mean()
-                        .item()
-                    )
+                    val_mean_dice = val_per_class_dice[1:].mean().item()
 
             else:
                 val_mean_dice = None
@@ -421,23 +408,15 @@ class Trainer:
             # ---------------------------------------------------------
             # Store training history.
             # ---------------------------------------------------------
-            self.history["train_loss"].append(
-                train_loss
-            )
+            self.history["train_loss"].append(train_loss)
 
-            self.history["val_loss"].append(
-                val_loss
-            )
+            self.history["val_loss"].append(val_loss)
 
             if val_mean_dice is not None:
-                self.history["val_mean_dice"].append(
-                    val_mean_dice
-                )
+                self.history["val_mean_dice"].append(val_mean_dice)
 
             if val_per_class_dice is not None:
-                self.history[
-                    "val_per_class_dice"
-                ].append(
+                self.history["val_per_class_dice"].append(
                     val_per_class_dice.cpu().tolist()
                 )
 
@@ -445,7 +424,6 @@ class Trainer:
             # Print epoch summary.
             # ---------------------------------------------------------
             if val_per_class_dice is not None:
-
                 # -----------------------------------------------------
                 # Per-class Dice.
                 #
@@ -456,21 +434,11 @@ class Trainer:
                 #     3 = WM
                 # -----------------------------------------------------
                 if val_per_class_dice.numel() >= 4:
-                    background_dice = (
-                        val_per_class_dice[0].item()
-                    )
+                    csf_dice = val_per_class_dice[1].item()
 
-                    csf_dice = (
-                        val_per_class_dice[1].item()
-                    )
+                    gm_dice = val_per_class_dice[2].item()
 
-                    gm_dice = (
-                        val_per_class_dice[2].item()
-                    )
-
-                    wm_dice = (
-                        val_per_class_dice[3].item()
-                    )
+                    wm_dice = val_per_class_dice[3].item()
 
                     print(
                         f"Epoch "
@@ -504,31 +472,20 @@ class Trainer:
             # Save the best checkpoint.
             # ---------------------------------------------------------
             if val_mean_dice is not None:
-
                 # Dice is maximized.
-                is_best = (
-                    val_mean_dice
-                    > self.best_val_dice
-                )
+                is_best = val_mean_dice > self.best_val_dice
 
                 if is_best:
-                    self.best_val_dice = (
-                        val_mean_dice
+                    self.best_val_dice = val_mean_dice
+
+                    checkpoint_path = self.save_checkpoint(
+                        epoch=epoch,
+                        val_loss=val_loss,
+                        val_mean_dice=val_mean_dice,
+                        filename="best_model.pt",
                     )
 
-                    checkpoint_path = (
-                        self.save_checkpoint(
-                            epoch=epoch,
-                            val_loss=val_loss,
-                            val_mean_dice=val_mean_dice,
-                            filename="best_model.pt",
-                        )
-                    )
-
-                    print(
-                        f"  Saved best checkpoint: "
-                        f"{checkpoint_path}"
-                    )
+                    print(f"  Saved best checkpoint: {checkpoint_path}")
 
             else:
                 # Fallback: minimize validation loss when no metric
@@ -536,18 +493,13 @@ class Trainer:
                 if val_loss < self.best_val_loss:
                     self.best_val_loss = val_loss
 
-                    checkpoint_path = (
-                        self.save_checkpoint(
-                            epoch=epoch,
-                            val_loss=val_loss,
-                            val_mean_dice=None,
-                            filename="best_model.pt",
-                        )
+                    checkpoint_path = self.save_checkpoint(
+                        epoch=epoch,
+                        val_loss=val_loss,
+                        val_mean_dice=None,
+                        filename="best_model.pt",
                     )
 
-                    print(
-                        f"  Saved best checkpoint: "
-                        f"{checkpoint_path}"
-                    )
+                    print(f"  Saved best checkpoint: {checkpoint_path}")
 
         return self.history

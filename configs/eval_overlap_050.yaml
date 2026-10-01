@@ -44,8 +44,8 @@ loss:
   ce_weight: 1.0
   include_background: true
 
-# Final baseline: no class weighting.
-class_weights: null
+  # Class order: background, CSF, GM, WM.
+  class_weights: [1.0, 1.5, 1.0, 1.0]
 
 inference:
   roi_size: [96, 96, 96]
@@ -53,4 +53,4 @@ inference:
   overlap: 0.50
 
 output:
-  checkpoint_dir: "outputs/checkpoints"
+  checkpoint_dir: "outputs/experiments/csf_weighted/checkpoints"

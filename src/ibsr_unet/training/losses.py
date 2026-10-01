@@ -5,9 +5,8 @@ The baseline training objective combines:
 
     Total Loss = Dice Loss + Cross-Entropy Loss
 
-Dice loss encourages good overlap between predicted and reference
-segmentation masks, while cross-entropy provides voxel-level
-classification supervision.
+Optional class weights can emphasize selected tissue classes, such as
+CSF, when improving boundary-sensitive segmentation is the objective.
 
 Expected tensors
 ----------------
@@ -31,7 +30,7 @@ from torch import Tensor, nn
 
 class DiceCrossEntropyLoss(nn.Module):
     """
-    Combined Dice and Cross-Entropy loss for multi-class segmentation.
+    Combined Dice + Cross-Entropy loss for multi-class segmentation.
 
     Parameters
     ----------
@@ -44,13 +43,18 @@ class DiceCrossEntropyLoss(nn.Module):
     include_background:
         Whether the background class contributes to the Dice loss.
 
+    class_weights:
+        Optional per-class weights in channel order. For IBSR-18:
+
+            [background, CSF, GM, WM]
+
+        The same weights are applied to Dice and Cross-Entropy loss.
+
     smooth_nr:
-        Smoothing term added to the Dice numerator for numerical
-        stability.
+        Smoothing term added to the Dice numerator.
 
     smooth_dr:
-        Smoothing term added to the Dice denominator for numerical
-        stability.
+        Smoothing term added to the Dice denominator.
     """
 
     def __init__(
@@ -58,6 +62,7 @@ class DiceCrossEntropyLoss(nn.Module):
         dice_weight: float = 1.0,
         ce_weight: float = 1.0,
         include_background: bool = True,
+        class_weights: list[float] | None = None,
         smooth_nr: float = 1e-5,
         smooth_dr: float = 1e-5,
     ) -> None:
@@ -70,9 +75,24 @@ class DiceCrossEntropyLoss(nn.Module):
             raise ValueError("ce_weight must be >= 0.")
 
         if dice_weight == 0 and ce_weight == 0:
-            raise ValueError(
-                "At least one loss weight must be greater than zero."
+            raise ValueError("At least one loss weight must be greater than zero.")
+
+        if class_weights is not None:
+            if len(class_weights) != 4:
+                raise ValueError(
+                    "class_weights must contain exactly 4 values "
+                    "for [background, CSF, GM, WM]."
+                )
+
+            if any(weight <= 0 for weight in class_weights):
+                raise ValueError("All class weights must be > 0.")
+
+            class_weights_tensor = torch.tensor(
+                class_weights,
+                dtype=torch.float32,
             )
+        else:
+            class_weights_tensor = None
 
         self.dice_weight = dice_weight
         self.ce_weight = ce_weight
@@ -81,11 +101,14 @@ class DiceCrossEntropyLoss(nn.Module):
             include_background=include_background,
             to_onehot_y=True,
             softmax=True,
+            weight=class_weights_tensor,
             smooth_nr=smooth_nr,
             smooth_dr=smooth_dr,
         )
 
-        self.cross_entropy_loss = nn.CrossEntropyLoss()
+        self.cross_entropy_loss = nn.CrossEntropyLoss(
+            weight=class_weights_tensor,
+        )
 
     def forward(
         self,
@@ -136,22 +159,16 @@ class DiceCrossEntropyLoss(nn.Module):
             raise ValueError(
                 "Prediction and target spatial dimensions do not match: "
                 f"{tuple(prediction.shape[2:])} vs "
-                f"{tuple(target.shape[2:])}."
+                f"{tuple(target.shape[2:])}"
             )
 
-        # Segmentation labels represent categorical classes.
-        # CrossEntropyLoss requires class indices of type long.
         target = target.long()
 
         dice = self.dice_loss(prediction, target)
 
-        # CrossEntropyLoss expects [B, D, H, W].
         ce = self.cross_entropy_loss(
             prediction,
             target[:, 0],
         )
 
-        return (
-            self.dice_weight * dice
-            + self.ce_weight * ce
-        )
+        return self.dice_weight * dice + self.ce_weight * ce

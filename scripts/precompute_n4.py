@@ -7,7 +7,6 @@ from pathlib import Path
 import numpy as np
 import SimpleITK as sitk
 
-
 # ============================================================
 # Paths
 # ============================================================
@@ -40,13 +39,12 @@ N4_NUMBER_OF_CONTROL_POINTS = [4, 4, 4]
 # Subject discovery
 # ============================================================
 
+
 def get_subjects() -> list[str]:
     """Return all IBSR subject directories in data/raw."""
 
     if not RAW_DIR.exists():
-        raise FileNotFoundError(
-            f"Raw data directory does not exist:\n{RAW_DIR}"
-        )
+        raise FileNotFoundError(f"Raw data directory does not exist:\n{RAW_DIR}")
 
     subjects = sorted(
         path.name
@@ -61,19 +59,18 @@ def get_subjects() -> list[str]:
 # Loading
 # ============================================================
 
+
 def load_image(subject: str) -> sitk.Image:
     """Load the raw IBSR image."""
 
     image_path = RAW_DIR / subject / f"{subject}.nii.gz"
 
     if not image_path.exists():
-        raise FileNotFoundError(
-            f"Raw image not found:\n{image_path}"
-        )
+        raise FileNotFoundError(f"Raw image not found:\n{image_path}")
 
     image = sitk.ReadImage(str(image_path))
 
-    print(f"\nInput image:")
+    print("\nInput image:")
     print(f"  {image_path}")
     print(f"  Size:       {image.GetSize()}")
     print(f"  Spacing:    {image.GetSpacing()}")
@@ -87,6 +84,7 @@ def load_image(subject: str) -> sitk.Image:
 # ============================================================
 # Mask
 # ============================================================
+
 
 def create_foreground_mask(image: sitk.Image) -> sitk.Image:
     """
@@ -107,6 +105,7 @@ def create_foreground_mask(image: sitk.Image) -> sitk.Image:
 # ============================================================
 # Statistics
 # ============================================================
+
 
 def get_masked_values(
     image: sitk.Image,
@@ -180,13 +179,9 @@ def print_bias_field_statistics(
     before boolean indexing.
     """
 
-    bias_array = sitk.GetArrayViewFromImage(
-        bias_field
-    ).astype(np.float64)
+    bias_array = sitk.GetArrayViewFromImage(bias_field).astype(np.float64)
 
-    mask_array = sitk.GetArrayViewFromImage(
-        mask
-    )
+    mask_array = sitk.GetArrayViewFromImage(mask)
 
     foreground = mask_array > 0
 
@@ -195,10 +190,7 @@ def print_bias_field_statistics(
     values = values[np.isfinite(values)]
 
     if values.size == 0:
-        print(
-            "\nBias field: "
-            "no finite foreground values found."
-        )
+        print("\nBias field: no finite foreground values found.")
         return
 
     p = np.percentile(
@@ -209,11 +201,7 @@ def print_bias_field_statistics(
     mean = values.mean()
     std = values.std()
 
-    cv = (
-        std / mean
-        if mean != 0
-        else np.nan
-    )
+    cv = std / mean if mean != 0 else np.nan
 
     print("\n" + "=" * 65)
     print("N4 MULTIPLICATIVE BIAS FIELD")
@@ -237,26 +225,16 @@ def print_bias_field_statistics(
     print(f"  P99.9:           {p[7]:.6f}")
 
     print("\nInterpretation:")
-    print(
-        "  The bias field is a multiplicative intensity "
-        "correction field."
-    )
-    print(
-        "  Only values inside the foreground mask are "
-        "relevant for diagnosis."
-    )
+    print("  The bias field is a multiplicative intensity correction field.")
+    print("  Only values inside the foreground mask are relevant for diagnosis.")
 
     if np.any(values <= 0):
         print(
-            "\nWARNING: Non-positive values detected "
-            "inside the foreground bias field."
+            "\nWARNING: Non-positive values detected inside the foreground bias field."
         )
 
     if not np.all(np.isfinite(values)):
-        print(
-            "\nWARNING: Non-finite values detected "
-            "inside the foreground bias field."
-        )
+        print("\nWARNING: Non-finite values detected inside the foreground bias field.")
 
     print("=" * 65)
 
@@ -264,6 +242,7 @@ def print_bias_field_statistics(
 # ============================================================
 # Validation
 # ============================================================
+
 
 def validate_image_geometry(
     image: sitk.Image,
@@ -297,9 +276,7 @@ def validate_image_geometry(
         atol=1e-6,
         rtol=0,
     ):
-        raise RuntimeError(
-            f"{name} origin mismatch."
-        )
+        raise RuntimeError(f"{name} origin mismatch.")
 
     if not np.allclose(
         image.GetDirection(),
@@ -307,9 +284,7 @@ def validate_image_geometry(
         atol=1e-6,
         rtol=0,
     ):
-        raise RuntimeError(
-            f"{name} direction mismatch."
-        )
+        raise RuntimeError(f"{name} direction mismatch.")
 
 
 def validate_finite(
@@ -321,9 +296,7 @@ def validate_finite(
     array = sitk.GetArrayViewFromImage(image)
 
     if not np.all(np.isfinite(array)):
-        raise RuntimeError(
-            f"{name} contains NaN or Inf values."
-        )
+        raise RuntimeError(f"{name} contains NaN or Inf values.")
 
 
 def validate_image(
@@ -344,14 +317,13 @@ def validate_image(
         name,
     )
 
-    print(
-        f"{name} validation: PASSED"
-    )
+    print(f"{name} validation: PASSED")
 
 
 # ============================================================
 # N4 correction
 # ============================================================
+
 
 def run_n4(
     image: sitk.Image,
@@ -385,9 +357,7 @@ def run_n4(
     # Foreground mask
     # --------------------------------------------------------
 
-    mask = create_foreground_mask(
-        image
-    )
+    mask = create_foreground_mask(image)
 
     # --------------------------------------------------------
     # Shrink for N4 fitting
@@ -395,9 +365,7 @@ def run_n4(
 
     dimension = image.GetDimension()
 
-    shrink_factors = [
-        SHRINK_FACTOR
-    ] * dimension
+    shrink_factors = [SHRINK_FACTOR] * dimension
 
     image_shrunk = sitk.Shrink(
         image_float,
@@ -409,52 +377,29 @@ def run_n4(
         shrink_factors,
     )
 
-    print(
-        f"\nOriginal size: {image.GetSize()}"
-    )
+    print(f"\nOriginal size: {image.GetSize()}")
 
-    print(
-        f"Shrunk size:   {image_shrunk.GetSize()}"
-    )
+    print(f"Shrunk size:   {image_shrunk.GetSize()}")
 
-    print(
-        f"Shrink factor: {SHRINK_FACTOR}"
-    )
+    print(f"Shrink factor: {SHRINK_FACTOR}")
 
     # --------------------------------------------------------
     # Configure N4
     # --------------------------------------------------------
 
-    corrector = (
-        sitk.N4BiasFieldCorrectionImageFilter()
-    )
+    corrector = sitk.N4BiasFieldCorrectionImageFilter()
 
-    corrector.SetMaximumNumberOfIterations(
-        N4_MAX_ITERATIONS
-    )
+    corrector.SetMaximumNumberOfIterations(N4_MAX_ITERATIONS)
 
-    corrector.SetConvergenceThreshold(
-        N4_CONVERGENCE_THRESHOLD
-    )
+    corrector.SetConvergenceThreshold(N4_CONVERGENCE_THRESHOLD)
 
-    corrector.SetNumberOfControlPoints(
-        N4_NUMBER_OF_CONTROL_POINTS
-    )
+    corrector.SetNumberOfControlPoints(N4_NUMBER_OF_CONTROL_POINTS)
 
-    print(
-        f"\nMaximum iterations: "
-        f"{N4_MAX_ITERATIONS}"
-    )
+    print(f"\nMaximum iterations: {N4_MAX_ITERATIONS}")
 
-    print(
-        f"Convergence threshold: "
-        f"{N4_CONVERGENCE_THRESHOLD}"
-    )
+    print(f"Convergence threshold: {N4_CONVERGENCE_THRESHOLD}")
 
-    print(
-        f"Control points: "
-        f"{N4_NUMBER_OF_CONTROL_POINTS}"
-    )
+    print(f"Control points: {N4_NUMBER_OF_CONTROL_POINTS}")
 
     # --------------------------------------------------------
     # Execute N4
@@ -471,28 +416,19 @@ def run_n4(
 
     elapsed = time.time() - start_time
 
-    print(
-        f"N4 fitting completed in "
-        f"{elapsed:.2f} seconds."
-    )
+    print(f"N4 fitting completed in {elapsed:.2f} seconds.")
 
     # --------------------------------------------------------
     # Recover full-resolution log bias field
     # --------------------------------------------------------
 
-    log_bias_field = (
-        corrector.GetLogBiasFieldAsImage(
-            image_float
-        )
-    )
+    log_bias_field = corrector.GetLogBiasFieldAsImage(image_float)
 
     # --------------------------------------------------------
     # Convert log bias field to multiplicative field
     # --------------------------------------------------------
 
-    bias_field = sitk.Exp(
-        log_bias_field
-    )
+    bias_field = sitk.Exp(log_bias_field)
 
     # --------------------------------------------------------
     # Correct original full-resolution image
@@ -502,9 +438,7 @@ def run_n4(
     # Protect against log(0).
     # --------------------------------------------------------
 
-    image_array = sitk.GetArrayFromImage(
-        image_float
-    )
+    image_array = sitk.GetArrayFromImage(image_float)
 
     image_array = np.maximum(
         image_array.astype(np.float32),
@@ -516,17 +450,11 @@ def run_n4(
         isVector=False,
     )
 
-    safe_image.CopyInformation(
-        image_float
-    )
+    safe_image.CopyInformation(image_float)
 
-    log_image = sitk.Log(
-        safe_image
-    )
+    log_image = sitk.Log(safe_image)
 
-    corrected_image = sitk.Exp(
-        log_image - log_bias_field
-    )
+    corrected_image = sitk.Exp(log_image - log_bias_field)
 
     # --------------------------------------------------------
     # Restore exact zero background
@@ -565,6 +493,7 @@ def run_n4(
 # Saving
 # ============================================================
 
+
 def save_outputs(
     subject: str,
     corrected_image: sitk.Image,
@@ -582,15 +511,9 @@ def save_outputs(
         exist_ok=True,
     )
 
-    corrected_path = (
-        OUTPUT_DIR /
-        f"{subject}_n4.nii.gz"
-    )
+    corrected_path = OUTPUT_DIR / f"{subject}_n4.nii.gz"
 
-    bias_path = (
-        DEBUG_OUTPUT_DIR /
-        f"{subject}_bias_field.nii.gz"
-    )
+    bias_path = DEBUG_OUTPUT_DIR / f"{subject}_bias_field.nii.gz"
 
     sitk.WriteImage(
         corrected_image,
@@ -604,20 +527,15 @@ def save_outputs(
 
     print("\nSaved files:")
 
-    print(
-        f"  Corrected image:\n"
-        f"    {corrected_path}"
-    )
+    print(f"  Corrected image:\n    {corrected_path}")
 
-    print(
-        f"  Bias field:\n"
-        f"    {bias_path}"
-    )
+    print(f"  Bias field:\n    {bias_path}")
 
 
 # ============================================================
 # Process subject
 # ============================================================
+
 
 def process_subject(
     subject: str,
@@ -625,21 +543,12 @@ def process_subject(
 ) -> None:
     """Run N4 preprocessing for one subject."""
 
-    corrected_path = (
-        OUTPUT_DIR /
-        f"{subject}_n4.nii.gz"
-    )
+    corrected_path = OUTPUT_DIR / f"{subject}_n4.nii.gz"
 
     if corrected_path.exists() and not overwrite:
+        print(f"\nSkipping {subject}: output already exists.")
 
-        print(
-            f"\nSkipping {subject}: "
-            f"output already exists."
-        )
-
-        print(
-            "Use --overwrite to regenerate."
-        )
+        print("Use --overwrite to regenerate.")
 
         return
 
@@ -652,17 +561,13 @@ def process_subject(
     # Load
     # --------------------------------------------------------
 
-    image = load_image(
-        subject
-    )
+    image = load_image(subject)
 
     # --------------------------------------------------------
     # Mask
     # --------------------------------------------------------
 
-    mask = create_foreground_mask(
-        image
-    )
+    mask = create_foreground_mask(image)
 
     # --------------------------------------------------------
     # Raw statistics
@@ -678,9 +583,7 @@ def process_subject(
     # N4
     # --------------------------------------------------------
 
-    corrected_image, bias_field = run_n4(
-        image
-    )
+    corrected_image, bias_field = run_n4(image)
 
     # --------------------------------------------------------
     # Corrected statistics
@@ -711,40 +614,30 @@ def process_subject(
         bias_field,
     )
 
-    print(
-        f"\nFinished {subject}."
-    )
+    print(f"\nFinished {subject}.")
 
 
 # ============================================================
 # Main
 # ============================================================
 
-def main() -> None:
 
+def main() -> None:
     parser = argparse.ArgumentParser(
-        description=(
-            "Precompute SimpleITK N4 bias-field "
-            "corrected IBSR-18 volumes."
-        )
+        description=("Precompute SimpleITK N4 bias-field corrected IBSR-18 volumes.")
     )
 
     parser.add_argument(
         "--subject",
         type=str,
         default=None,
-        help=(
-            "Process a single subject, e.g. "
-            "--subject IBSR_01"
-        ),
+        help=("Process a single subject, e.g. --subject IBSR_01"),
     )
 
     parser.add_argument(
         "--overwrite",
         action="store_true",
-        help=(
-            "Overwrite existing N4 outputs."
-        ),
+        help=("Overwrite existing N4 outputs."),
     )
 
     args = parser.parse_args()
@@ -753,50 +646,25 @@ def main() -> None:
     print("IBSR-18 N4 PRECOMPUTATION")
     print("=" * 70)
 
-    print(
-        f"\nProject root:"
-        f"\n  {PROJECT_ROOT}"
-    )
+    print(f"\nProject root:\n  {PROJECT_ROOT}")
 
-    print(
-        f"\nRaw directory:"
-        f"\n  {RAW_DIR}"
-    )
+    print(f"\nRaw directory:\n  {RAW_DIR}")
 
-    print(
-        f"\nOutput directory:"
-        f"\n  {OUTPUT_DIR}"
-    )
+    print(f"\nOutput directory:\n  {OUTPUT_DIR}")
 
-    print(
-        f"\nDebug directory:"
-        f"\n  {DEBUG_OUTPUT_DIR}"
-    )
+    print(f"\nDebug directory:\n  {DEBUG_OUTPUT_DIR}")
 
     print("\nN4 configuration:")
-    print(
-        f"  Shrink factor:        "
-        f"{SHRINK_FACTOR}"
-    )
-    print(
-        f"  Maximum iterations:   "
-        f"{N4_MAX_ITERATIONS}"
-    )
-    print(
-        f"  Convergence threshold:"
-        f" {N4_CONVERGENCE_THRESHOLD}"
-    )
-    print(
-        f"  Control points:       "
-        f"{N4_NUMBER_OF_CONTROL_POINTS}"
-    )
+    print(f"  Shrink factor:        {SHRINK_FACTOR}")
+    print(f"  Maximum iterations:   {N4_MAX_ITERATIONS}")
+    print(f"  Convergence threshold: {N4_CONVERGENCE_THRESHOLD}")
+    print(f"  Control points:       {N4_NUMBER_OF_CONTROL_POINTS}")
 
     # --------------------------------------------------------
     # Single subject
     # --------------------------------------------------------
 
     if args.subject is not None:
-
         process_subject(
             args.subject,
             overwrite=args.overwrite,
@@ -807,24 +675,17 @@ def main() -> None:
     # --------------------------------------------------------
 
     else:
-
         subjects = get_subjects()
 
         if not subjects:
-            raise RuntimeError(
-                f"No IBSR subjects found in:\n"
-                f"{RAW_DIR}"
-            )
+            raise RuntimeError(f"No IBSR subjects found in:\n{RAW_DIR}")
 
-        print(
-            f"\nFound {len(subjects)} subjects:"
-        )
+        print(f"\nFound {len(subjects)} subjects:")
 
         for subject in subjects:
             print(f"  {subject}")
 
         for subject in subjects:
-
             process_subject(
                 subject,
                 overwrite=args.overwrite,

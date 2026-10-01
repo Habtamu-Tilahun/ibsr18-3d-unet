@@ -27,7 +27,6 @@ import numpy as np
 from ibsr_unet.data.datasets import get_subject_paths
 from ibsr_unet.data.splits import get_split_subjects
 
-
 EXPECTED_LABELS = (0, 1, 2, 3)
 
 
@@ -89,23 +88,16 @@ def analyze_subject(
     )
 
     if subject.label is None:
-        raise FileNotFoundError(
-            f"No segmentation path available for {subject_id}."
-        )
+        raise FileNotFoundError(f"No segmentation path available for {subject_id}.")
 
     if not subject.label.exists():
         raise FileNotFoundError(
-            f"Segmentation file not found for {subject_id}: "
-            f"{subject.label}"
+            f"Segmentation file not found for {subject_id}: {subject.label}"
         )
 
-    label_image = nib.load(
-        str(subject.label)
-    )
+    label_image = nib.load(str(subject.label))
 
-    labels = np.asanyarray(
-        label_image.dataobj
-    )
+    labels = np.asanyarray(label_image.dataobj)
 
     # Remove the singleton fourth dimension if present.
     labels = np.squeeze(labels)
@@ -119,9 +111,7 @@ def analyze_subject(
     unique_labels = np.unique(labels)
 
     unexpected_labels = [
-        int(label)
-        for label in unique_labels
-        if int(label) not in EXPECTED_LABELS
+        int(label) for label in unique_labels if int(label) not in EXPECTED_LABELS
     ]
 
     if unexpected_labels:
@@ -132,11 +122,7 @@ def analyze_subject(
         )
 
     return {
-        class_index: int(
-            np.count_nonzero(
-                labels == class_index
-            )
-        )
+        class_index: int(np.count_nonzero(labels == class_index))
         for class_index in EXPECTED_LABELS
     }
 
@@ -147,26 +133,16 @@ def print_subject_results(
 ) -> None:
     """Print class distribution for one subject."""
 
-    total_voxels = sum(
-        class_counts.values()
-    )
+    total_voxels = sum(class_counts.values())
 
     print(f"\n{subject_id}")
     print("-" * 60)
 
     for class_index in EXPECTED_LABELS:
         count = class_counts[class_index]
-        percentage = (
-            100.0 * count / total_voxels
-            if total_voxels > 0
-            else 0.0
-        )
+        percentage = 100.0 * count / total_voxels if total_voxels > 0 else 0.0
 
-        print(
-            f"Class {class_index}: "
-            f"{count:>12,} voxels "
-            f"({percentage:>7.3f}%)"
-        )
+        print(f"Class {class_index}: {count:>12,} voxels ({percentage:>7.3f}%)")
 
 
 def print_summary(
@@ -175,51 +151,35 @@ def print_summary(
     """Print aggregate class-distribution statistics."""
 
     if not all_counts:
-        raise RuntimeError(
-            "No subjects were analyzed."
-        )
+        raise RuntimeError("No subjects were analyzed.")
 
-    subjects = list(
-        all_counts.keys()
-    )
+    subjects = list(all_counts.keys())
 
     total_counts = {
         class_index: sum(
-            subject_counts[class_index]
-            for subject_counts in all_counts.values()
+            subject_counts[class_index] for subject_counts in all_counts.values()
         )
         for class_index in EXPECTED_LABELS
     }
 
-    total_voxels = sum(
-        total_counts.values()
-    )
+    total_voxels = sum(total_counts.values())
 
     # Calculate percentages separately for each subject.
-    subject_percentages: dict[
-        int, list[float]
-    ] = {
-        class_index: []
-        for class_index in EXPECTED_LABELS
+    subject_percentages: dict[int, list[float]] = {
+        class_index: [] for class_index in EXPECTED_LABELS
     }
 
     for subject_counts in all_counts.values():
-        subject_total = sum(
-            subject_counts.values()
-        )
+        subject_total = sum(subject_counts.values())
 
         for class_index in EXPECTED_LABELS:
             percentage = (
-                100.0
-                * subject_counts[class_index]
-                / subject_total
+                100.0 * subject_counts[class_index] / subject_total
                 if subject_total > 0
                 else 0.0
             )
 
-            subject_percentages[
-                class_index
-            ].append(percentage)
+            subject_percentages[class_index].append(percentage)
 
     print("\n" + "=" * 70)
     print("Overall Class Distribution")
@@ -228,17 +188,12 @@ def print_summary(
     for class_index in EXPECTED_LABELS:
         count = total_counts[class_index]
 
-        percentage = (
-            100.0 * count / total_voxels
-            if total_voxels > 0
-            else 0.0
-        )
+        percentage = 100.0 * count / total_voxels if total_voxels > 0 else 0.0
 
         subjects_present = sum(
             count > 0
             for count in (
-                all_counts[subject_id][class_index]
-                for subject_id in subjects
+                all_counts[subject_id][class_index] for subject_id in subjects
             )
         )
 
@@ -254,12 +209,7 @@ def print_summary(
     print("Per-Subject Class Percentage Statistics")
     print("=" * 70)
 
-    print(
-        f"{'Class':<10}"
-        f"{'Mean %':>12}"
-        f"{'Min %':>12}"
-        f"{'Max %':>12}"
-    )
+    print(f"{'Class':<10}{'Mean %':>12}{'Min %':>12}{'Max %':>12}")
 
     print("-" * 46)
 
@@ -296,9 +246,7 @@ def main() -> None:
     print(f"Subjects:   {len(subject_ids)}")
     print(f"Data root:  {args.data_dir}")
 
-    all_counts: dict[
-        str, dict[int, int]
-    ] = {}
+    all_counts: dict[str, dict[int, int]] = {}
 
     for subject_id in subject_ids:
         class_counts = analyze_subject(

@@ -103,10 +103,7 @@ class IBSRDataModule:
         self.use_precomputed_n4 = use_precomputed_n4
 
         if self.use_precomputed_n4 and self.n4_dir is None:
-            raise ValueError(
-                "n4_dir must be provided when "
-                "use_precomputed_n4=True."
-            )
+            raise ValueError("n4_dir must be provided when use_precomputed_n4=True.")
 
         if self.use_precomputed_n4 and self.use_n4_bias_correction:
             raise ValueError(
@@ -119,9 +116,7 @@ class IBSRDataModule:
         self.pin_memory = pin_memory
 
         # persistent_workers requires at least one worker.
-        self.persistent_workers = (
-            persistent_workers and num_workers > 0
-        )
+        self.persistent_workers = persistent_workers and num_workers > 0
 
         self.train_dataset: Dataset | None = None
         self.val_dataset: Dataset | None = None
@@ -132,11 +127,7 @@ class IBSRDataModule:
 
         # Use the precomputed N4 directory as the image source when
         # enabled. Labels always remain in the original data directory.
-        image_dir = (
-            self.n4_dir
-            if self.use_precomputed_n4
-            else None
-        )
+        image_dir = self.n4_dir if self.use_precomputed_n4 else None
 
         self.train_dataset = create_train_dataset(
             data_dir=self.data_dir,
@@ -174,9 +165,7 @@ class IBSRDataModule:
         """Create the training DataLoader."""
 
         if self.train_dataset is None:
-            raise RuntimeError(
-                "DataModule has not been set up. Call setup() first."
-            )
+            raise RuntimeError("DataModule has not been set up. Call setup() first.")
 
         return DataLoader(
             self.train_dataset,
@@ -192,9 +181,7 @@ class IBSRDataModule:
         """Create the validation DataLoader."""
 
         if self.val_dataset is None:
-            raise RuntimeError(
-                "DataModule has not been set up. Call setup() first."
-            )
+            raise RuntimeError("DataModule has not been set up. Call setup() first.")
 
         return DataLoader(
             self.val_dataset,
@@ -209,9 +196,7 @@ class IBSRDataModule:
         """Create the test DataLoader."""
 
         if self.test_dataset is None:
-            raise RuntimeError(
-                "DataModule has not been set up. Call setup() first."
-            )
+            raise RuntimeError("DataModule has not been set up. Call setup() first.")
 
         return DataLoader(
             self.test_dataset,
@@ -231,34 +216,20 @@ class IBSRDataModule:
             "patch_size": self.patch_size,
             "num_samples": self.num_samples,
             "target_spacing": self.target_spacing,
-            "use_n4_bias_correction": (
-                self.use_n4_bias_correction
-            ),
-            "n4_dir": (
-                str(self.n4_dir)
-                if self.n4_dir is not None
-                else None
-            ),
-            "use_precomputed_n4": (
-                self.use_precomputed_n4
-            ),
+            "use_n4_bias_correction": (self.use_n4_bias_correction),
+            "n4_dir": (str(self.n4_dir) if self.n4_dir is not None else None),
+            "use_precomputed_n4": (self.use_precomputed_n4),
             "batch_size": self.batch_size,
             "num_workers": self.num_workers,
             "pin_memory": self.pin_memory,
             "persistent_workers": self.persistent_workers,
             "train_size": (
-                len(self.train_dataset)
-                if self.train_dataset is not None
-                else None
+                len(self.train_dataset) if self.train_dataset is not None else None
             ),
             "val_size": (
-                len(self.val_dataset)
-                if self.val_dataset is not None
-                else None
+                len(self.val_dataset) if self.val_dataset is not None else None
             ),
             "test_size": (
-                len(self.test_dataset)
-                if self.test_dataset is not None
-                else None
+                len(self.test_dataset) if self.test_dataset is not None else None
             ),
         }

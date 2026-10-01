@@ -31,7 +31,6 @@ from pathlib import Path
 
 from monai.data import Dataset
 
-
 # ---------------------------------------------------------------------------
 # Data structures
 # ---------------------------------------------------------------------------
@@ -110,18 +109,14 @@ def _read_split_file(
 
     if split_name not in {"train", "val", "test"}:
         raise ValueError(
-            f"Unsupported split '{split_name}'. "
-            "Expected one of: train, val, test."
+            f"Unsupported split '{split_name}'. Expected one of: train, val, test."
         )
 
     splits_dir = Path(splits_dir)
     split_file = splits_dir / f"{split_name}.txt"
 
     if not split_file.exists():
-        raise FileNotFoundError(
-            f"Split file not found:\n"
-            f"  {split_file}"
-        )
+        raise FileNotFoundError(f"Split file not found:\n  {split_file}")
 
     subject_ids: list[str] = []
 
@@ -135,10 +130,7 @@ def _read_split_file(
             subject_ids.append(subject_id)
 
     if not subject_ids:
-        raise ValueError(
-            f"Split file is empty:\n"
-            f"  {split_file}"
-        )
+        raise ValueError(f"Split file is empty:\n  {split_file}")
 
     if len(subject_ids) != len(set(subject_ids)):
         duplicates = sorted(
@@ -150,8 +142,7 @@ def _read_split_file(
         )
 
         raise ValueError(
-            f"Duplicate subject IDs found in {split_file}:\n"
-            f"  {duplicates}"
+            f"Duplicate subject IDs found in {split_file}:\n  {duplicates}"
         )
 
     return subject_ids
@@ -267,11 +258,7 @@ def build_subject(
 
     # Use the raw data directory unless an alternative image directory
     # has been explicitly supplied.
-    image_root = (
-        Path(image_dir)
-        if image_dir is not None
-        else data_dir
-    )
+    image_root = Path(image_dir) if image_dir is not None else data_dir
 
     image_path = get_image_path(
         root_dir=image_root,
@@ -279,10 +266,7 @@ def build_subject(
     )
 
     if not image_path.exists():
-        raise FileNotFoundError(
-            f"Image not found for {subject_id}:\n"
-            f"  {image_path}"
-        )
+        raise FileNotFoundError(f"Image not found for {subject_id}:\n  {image_path}")
 
     label_path: Path | None = None
 
@@ -295,8 +279,7 @@ def build_subject(
 
         if not label_path.exists():
             raise FileNotFoundError(
-                f"Label not found for {subject_id}:\n"
-                f"  {label_path}"
+                f"Label not found for {subject_id}:\n  {label_path}"
             )
 
     return IBSRSubject(
@@ -393,10 +376,7 @@ def subjects_to_records(
     Convert multiple IBSR subjects into MONAI dataset records.
     """
 
-    return [
-        subject_to_record(subject)
-        for subject in subjects
-    ]
+    return [subject_to_record(subject) for subject in subjects]
 
 
 # ---------------------------------------------------------------------------
@@ -622,9 +602,7 @@ def summarize_subjects(
             "subject_id": subject.subject_id,
             "image": str(subject.image_path),
             "label": (
-                str(subject.label_path)
-                if subject.label_path is not None
-                else ""
+                str(subject.label_path) if subject.label_path is not None else ""
             ),
             "has_label": subject.has_label,
         }

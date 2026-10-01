@@ -145,35 +145,23 @@ def main() -> None:
 
     for subject_id in TEST_SUBJECTS:
         image_path = RAW_DIR / subject_id / f"{subject_id}.nii.gz"
-        prediction_path = (
-            PRED_DIR / subject_id / f"{subject_id}_pred.nii.gz"
-        )
+        prediction_path = PRED_DIR / subject_id / f"{subject_id}_pred.nii.gz"
 
-        output_path = (
-            OUTPUT_DIR / f"{subject_id}_test_prediction.png"
-        )
+        output_path = OUTPUT_DIR / f"{subject_id}_test_prediction.png"
 
         print()
         print(f"{subject_id}")
         print("-" * 70)
 
         if not image_path.exists():
-            raise FileNotFoundError(
-                f"MRI not found: {image_path}"
-            )
+            raise FileNotFoundError(f"MRI not found: {image_path}")
 
         if not prediction_path.exists():
-            raise FileNotFoundError(
-                f"Prediction not found: {prediction_path}"
-            )
+            raise FileNotFoundError(f"Prediction not found: {prediction_path}")
 
-        image = np.asarray(
-            nib.load(str(image_path)).dataobj
-        )
+        image = np.asarray(nib.load(str(image_path)).dataobj)
 
-        prediction = np.asarray(
-            nib.load(str(prediction_path)).dataobj
-        )
+        prediction = np.asarray(nib.load(str(prediction_path)).dataobj)
 
         if image.ndim == 4 and image.shape[-1] == 1:
             image = image[..., 0]

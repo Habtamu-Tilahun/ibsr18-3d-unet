@@ -39,9 +39,7 @@ from ibsr_unet.training.trainer import Trainer
 def parse_args() -> argparse.Namespace:
     """Parse command-line arguments."""
 
-    parser = argparse.ArgumentParser(
-        description="Train a 3D U-Net on IBSR-18."
-    )
+    parser = argparse.ArgumentParser(description="Train a 3D U-Net on IBSR-18.")
 
     parser.add_argument(
         "--config",
@@ -69,17 +67,13 @@ def load_config(config_path: Path) -> dict[str, Any]:
     """
 
     if not config_path.exists():
-        raise FileNotFoundError(
-            f"Configuration file not found: {config_path}"
-        )
+        raise FileNotFoundError(f"Configuration file not found: {config_path}")
 
     with config_path.open("r", encoding="utf-8") as file:
         config = yaml.safe_load(file)
 
     if not isinstance(config, dict):
-        raise ValueError(
-            "Training configuration must contain a YAML mapping."
-        )
+        raise ValueError("Training configuration must contain a YAML mapping.")
 
     return config
 
@@ -106,9 +100,7 @@ def get_device() -> torch.device:
     if torch.cuda.is_available():
         device = torch.device("cuda")
 
-        print(
-            f"Using GPU: {torch.cuda.get_device_name(0)}"
-        )
+        print(f"Using GPU: {torch.cuda.get_device_name(0)}")
 
         return device
 
@@ -131,18 +123,13 @@ def build_datamodule(
     spacing = data_config.get("spacing")
 
     target_spacing = (
-        tuple(float(value) for value in spacing)
-        if spacing is not None
-        else None
+        tuple(float(value) for value in spacing) if spacing is not None else None
     )
 
     # ---------------------------------------------------------------
     # Training patch size
     # ---------------------------------------------------------------
-    patch_size = tuple(
-        int(value)
-        for value in data_config["patch_size"]
-    )
+    patch_size = tuple(int(value) for value in data_config["patch_size"])
 
     # ---------------------------------------------------------------
     # Optional N4 bias-field correction
@@ -159,11 +146,7 @@ def build_datamodule(
     # ---------------------------------------------------------------
     n4_dir = data_config.get("n4_dir")
 
-    n4_dir = (
-        Path(n4_dir)
-        if n4_dir is not None
-        else None
-    )
+    n4_dir = Path(n4_dir) if n4_dir is not None else None
 
     use_precomputed_n4 = bool(
         data_config.get(
@@ -176,22 +159,14 @@ def build_datamodule(
         data_dir=Path(data_config["root_dir"]),
         splits_dir=Path(data_config["splits_dir"]),
         patch_size=patch_size,
-        num_samples=int(
-            training_config.get("num_samples", 1)
-        ),
+        num_samples=int(training_config.get("num_samples", 1)),
         target_spacing=target_spacing,
         use_n4_bias_correction=use_n4_bias_correction,
         n4_dir=n4_dir,
         use_precomputed_n4=use_precomputed_n4,
-        batch_size=int(
-            training_config["batch_size"]
-        ),
-        num_workers=int(
-            training_config.get("num_workers", 0)
-        ),
-        pin_memory=bool(
-            training_config.get("pin_memory", True)
-        ),
+        batch_size=int(training_config["batch_size"]),
+        num_workers=int(training_config.get("num_workers", 0)),
+        pin_memory=bool(training_config.get("pin_memory", True)),
     )
 
 
@@ -202,10 +177,7 @@ def build_model(
 
     model_config = config["model"]
 
-    channels = tuple(
-        int(value)
-        for value in model_config["channels"]
-    )
+    channels = tuple(int(value) for value in model_config["channels"])
 
     strides = tuple(
         int(value)
@@ -216,17 +188,11 @@ def build_model(
     )
 
     return build_unet(
-        in_channels=int(
-            model_config["in_channels"]
-        ),
-        out_channels=int(
-            model_config["out_channels"]
-        ),
+        in_channels=int(model_config["in_channels"]),
+        out_channels=int(model_config["out_channels"]),
         channels=channels,
         strides=strides,
-        num_res_units=int(
-            model_config.get("num_res_units", 2)
-        ),
+        num_res_units=int(model_config.get("num_res_units", 2)),
     )
 
 
@@ -238,18 +204,15 @@ def build_loss(
     loss_config = config["loss"]
 
     return DiceCrossEntropyLoss(
-        dice_weight=float(
-            loss_config.get("dice_weight", 1.0)
-        ),
-        ce_weight=float(
-            loss_config.get("ce_weight", 1.0)
-        ),
+        dice_weight=float(loss_config.get("dice_weight", 1.0)),
+        ce_weight=float(loss_config.get("ce_weight", 1.0)),
         include_background=bool(
             loss_config.get(
                 "include_background",
                 True,
             )
         ),
+        class_weights=loss_config.get("class_weights"),
     )
 
 
@@ -267,9 +230,7 @@ def build_metric(
     3 = WM
     """
 
-    num_classes = int(
-        config["model"]["out_channels"]
-    )
+    num_classes = int(config["model"]["out_channels"])
 
     def metric(
         prediction: torch.Tensor,
@@ -324,55 +285,25 @@ def print_configuration(
     else:
         print(f"Target spacing:     {spacing}")
 
-    print(
-        "N4 bias correction: "
-        f"{use_n4_bias_correction}"
-    )
+    print(f"N4 bias correction: {use_n4_bias_correction}")
 
-    print(
-        "Precomputed N4:     "
-        f"{use_precomputed_n4}"
-    )
+    print(f"Precomputed N4:     {use_precomputed_n4}")
 
-    print(
-        "N4 directory:       "
-        f"{data_config.get('n4_dir')}"
-    )
+    print(f"N4 directory:       {data_config.get('n4_dir')}")
 
-    print(
-        f"Batch size:         "
-        f"{training_config['batch_size']}"
-    )
+    print(f"Batch size:         {training_config['batch_size']}")
 
-    print(
-        f"Num samples:        "
-        f"{training_config.get('num_samples', 1)}"
-    )
+    print(f"Num samples:        {training_config.get('num_samples', 1)}")
 
-    print(
-        f"Learning rate:      "
-        f"{training_config['learning_rate']}"
-    )
+    print(f"Learning rate:      {training_config['learning_rate']}")
 
-    print(
-        f"Weight decay:       "
-        f"{training_config.get('weight_decay', 0.0)}"
-    )
+    print(f"Weight decay:       {training_config.get('weight_decay', 0.0)}")
 
-    print(
-        f"Epochs:             "
-        f"{training_config['epochs']}"
-    )
+    print(f"Epochs:             {training_config['epochs']}")
 
-    print(
-        f"Channels:           "
-        f"{model_config['channels']}"
-    )
+    print(f"Channels:           {model_config['channels']}")
 
-    print(
-        f"Residual units:     "
-        f"{model_config.get('num_res_units', 2)}"
-    )
+    print(f"Residual units:     {model_config.get('num_res_units', 2)}")
 
     print("=" * 60 + "\n")
 
@@ -390,9 +321,7 @@ def main() -> None:
     # ---------------------------------------------------------------
     # Reproducibility
     # ---------------------------------------------------------------
-    seed = int(
-        config.get("seed", 42)
-    )
+    seed = int(config.get("seed", 42))
 
     set_seed(seed)
 
@@ -421,15 +350,9 @@ def main() -> None:
     # ---------------------------------------------------------------
     model = build_model(config)
 
-    num_parameters = sum(
-        parameter.numel()
-        for parameter in model.parameters()
-    )
+    num_parameters = sum(parameter.numel() for parameter in model.parameters())
 
-    print(
-        f"\nModel parameters: "
-        f"{num_parameters:,}"
-    )
+    print(f"\nModel parameters: {num_parameters:,}")
 
     # ---------------------------------------------------------------
     # Loss
@@ -443,9 +366,7 @@ def main() -> None:
 
     optimizer = AdamW(
         model.parameters(),
-        lr=float(
-            training_config["learning_rate"]
-        ),
+        lr=float(training_config["learning_rate"]),
         weight_decay=float(
             training_config.get(
                 "weight_decay",
@@ -512,9 +433,7 @@ def main() -> None:
         loss_fn=loss_fn,
         optimizer=optimizer,
         device=device,
-        num_epochs=int(
-            training_config["epochs"]
-        ),
+        num_epochs=int(training_config["epochs"]),
         checkpoint_dir=checkpoint_dir,
         metric_fn=metric_fn,
         roi_size=roi_size,
@@ -536,19 +455,11 @@ def main() -> None:
     print("\nTraining complete.")
 
     if history["val_mean_dice"]:
-        best_dice = max(
-            history["val_mean_dice"]
-        )
+        best_dice = max(history["val_mean_dice"])
 
-        print(
-            f"Best validation mean Dice: "
-            f"{best_dice:.4f}"
-        )
+        print(f"Best validation mean Dice: {best_dice:.4f}")
 
-    print(
-        f"Best checkpoint: "
-        f"{checkpoint_dir / 'best_model.pt'}"
-    )
+    print(f"Best checkpoint: {checkpoint_dir / 'best_model.pt'}")
 
 
 if __name__ == "__main__":

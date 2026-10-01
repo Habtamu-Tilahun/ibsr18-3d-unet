@@ -37,7 +37,6 @@ import numpy as np
 from ibsr_unet.data.datasets import get_subject_paths
 from ibsr_unet.data.splits import load_splits
 
-
 EXPECTED_LABELS = {0, 1, 2, 3}
 
 
@@ -114,10 +113,7 @@ def get_label_values(
     """
     data = np.asanyarray(label_image.dataobj)
 
-    return {
-        int(value)
-        for value in np.unique(data)
-    }
+    return {int(value) for value in np.unique(data)}
 
 
 def affines_match(
@@ -152,10 +148,7 @@ def validate_subject(
     )
 
     if not subject.image.exists():
-        raise FileNotFoundError(
-            f"Image not found for {subject_id}: "
-            f"{subject.image}"
-        )
+        raise FileNotFoundError(f"Image not found for {subject_id}: {subject.image}")
 
     image = nib.load(subject.image)
 
@@ -163,9 +156,7 @@ def validate_subject(
     image_spacing = get_spacing(image)
     image_orientation = get_orientation(image)
 
-    image_min, image_max, image_mean, image_nonzero = (
-        get_image_statistics(image)
-    )
+    image_min, image_max, image_mean, image_nonzero = get_image_statistics(image)
 
     label_shape = None
     label_spacing = None
@@ -176,14 +167,11 @@ def validate_subject(
 
     if split in {"train", "val"}:
         if subject.label is None:
-            raise FileNotFoundError(
-                f"Label path is missing for {subject_id}."
-            )
+            raise FileNotFoundError(f"Label path is missing for {subject_id}.")
 
         if not subject.label.exists():
             raise FileNotFoundError(
-                f"Segmentation not found for {subject_id}: "
-                f"{subject.label}"
+                f"Segmentation not found for {subject_id}: {subject.label}"
             )
 
         label = nib.load(subject.label)
@@ -232,16 +220,14 @@ def validate_label_values(
 
         if unexpected:
             errors.append(
-                f"{report.subject_id}: unexpected labels "
-                f"{sorted(unexpected)}"
+                f"{report.subject_id}: unexpected labels {sorted(unexpected)}"
             )
 
         missing_expected = EXPECTED_LABELS - report.label_values
 
         if missing_expected:
             errors.append(
-                f"{report.subject_id}: missing labels "
-                f"{sorted(missing_expected)}"
+                f"{report.subject_id}: missing labels {sorted(missing_expected)}"
             )
 
     return errors
@@ -264,10 +250,7 @@ def validate_geometry(
             )
 
         if report.affine_match is False:
-            errors.append(
-                f"{report.subject_id}: image and label affines "
-                f"do not match"
-            )
+            errors.append(f"{report.subject_id}: image and label affines do not match")
 
     return errors
 
@@ -280,17 +263,11 @@ def print_subject_report(report: SubjectReport) -> None:
     print("-" * 60)
 
     print(f"Image shape:       {report.image_shape}")
-    print(
-        "Image spacing:     "
-        f"{tuple(round(x, 4) for x in report.image_spacing)}"
-    )
+    print(f"Image spacing:     {tuple(round(x, 4) for x in report.image_spacing)}")
     print(f"Orientation:       {report.image_orientation}")
     print(f"Image dtype:       {report.image_dtype}")
 
-    print(
-        f"Intensity range:   "
-        f"{report.image_min:.3f} - {report.image_max:.3f}"
-    )
+    print(f"Intensity range:   {report.image_min:.3f} - {report.image_max:.3f}")
     print(f"Mean intensity:    {report.image_mean:.3f}")
     print(f"Nonzero voxels:    {report.image_nonzero_voxels:,}")
 
@@ -301,10 +278,7 @@ def print_subject_report(report: SubjectReport) -> None:
             f"{tuple(round(x, 4) for x in report.label_spacing or ())}"
         )
         print(f"Label orientation: {report.label_orientation}")
-        print(
-            f"Label values:      "
-            f"{sorted(report.label_values or set())}"
-        )
+        print(f"Label values:      {sorted(report.label_values or set())}")
         print(f"Shape match:       {report.shape_match}")
         print(f"Affine match:      {report.affine_match}")
     else:
@@ -325,35 +299,20 @@ def print_summary(
     split_counts: dict[str, int] = {}
 
     for report in reports:
-        split_counts[report.split] = (
-            split_counts.get(report.split, 0) + 1
-        )
+        split_counts[report.split] = split_counts.get(report.split, 0) + 1
 
     for split, count in split_counts.items():
         print(f"{split:>10}: {count} subjects")
 
     print(f"{'total':>10}: {len(reports)} subjects")
 
-    shapes = sorted(
-        {
-            report.image_shape
-            for report in reports
-        }
-    )
+    shapes = sorted({report.image_shape for report in reports})
 
     spacings = sorted(
-        {
-            tuple(round(value, 4) for value in report.image_spacing)
-            for report in reports
-        }
+        {tuple(round(value, 4) for value in report.image_spacing) for report in reports}
     )
 
-    orientations = sorted(
-        {
-            report.image_orientation
-            for report in reports
-        }
-    )
+    orientations = sorted({report.image_orientation for report in reports})
 
     print("\nImage shapes:")
     for shape in shapes:
@@ -374,9 +333,7 @@ def parse_args() -> argparse.Namespace:
     """
     Parse command-line arguments.
     """
-    parser = argparse.ArgumentParser(
-        description="Validate the IBSR-18 dataset."
-    )
+    parser = argparse.ArgumentParser(description="Validate the IBSR-18 dataset.")
 
     parser.add_argument(
         "--data-dir",
