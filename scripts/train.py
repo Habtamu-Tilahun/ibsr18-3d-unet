@@ -34,6 +34,7 @@ from ibsr_unet.evaluation.metrics import dice_per_class
 from ibsr_unet.models.unet import build_unet
 from ibsr_unet.training.losses import DiceCrossEntropyLoss
 from ibsr_unet.training.trainer import Trainer
+from ibsr_unet.utils.reproducibility import set_seed
 
 
 def parse_args() -> argparse.Namespace:
@@ -76,22 +77,6 @@ def load_config(config_path: Path) -> dict[str, Any]:
         raise ValueError("Training configuration must contain a YAML mapping.")
 
     return config
-
-
-def set_seed(seed: int) -> None:
-    """Set random seeds for reproducible experiments."""
-
-    import random
-
-    import numpy as np
-
-    random.seed(seed)
-    np.random.seed(seed)
-
-    torch.manual_seed(seed)
-
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(seed)
 
 
 def get_device() -> torch.device:
