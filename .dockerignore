@@ -1,0 +1,40 @@
+# Git
+.git
+.gitignore
+.github
+
+# Python environments and caches
+.venv
+venv
+__pycache__
+*.py[cod]
+.pytest_cache
+.ruff_cache
+.mypy_cache
+
+# IDE / editor files
+.vscode
+.idea
+
+# Medical imaging data
+data/raw
+data/processed
+
+# Model outputs and experiment artifacts
+outputs
+*.pt
+*.pth
+*.ckpt
+
+# Logs
+*.log
+
+# Documentation/build artifacts
+site
+dist
+build
+*.egg-info
+
+# OS files
+.DS_Store
+Thumbs.db

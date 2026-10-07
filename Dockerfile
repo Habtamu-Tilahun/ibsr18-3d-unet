@@ -3,7 +3,7 @@
 # CUDA-enabled environment for 3D medical image segmentation
 # ============================================================
 
-FROM nvidia/cuda:12.6.3-cudnn-runtime-ubuntu24.04
+FROM nvidia/cuda:12.6.3-cudnn-runtime-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -46,26 +46,18 @@ RUN python -m pip install --upgrade pip setuptools
 # Install PyTorch
 # ------------------------------------------------------------
 
+ENV PIP_DEFAULT_TIMEOUT=300 \
+    PIP_RETRIES=10
+
 RUN pip install \
     torch==2.14.0 \
-    torchvision==0.24.0
+    --index-url https://download.pytorch.org/whl/cu126
 
 # ------------------------------------------------------------
-# Copy project metadata
+# Copy project files
 # ------------------------------------------------------------
 
 COPY pyproject.toml README.md ./
-
-# ------------------------------------------------------------
-# Install project dependencies
-# ------------------------------------------------------------
-
-RUN pip install -e .
-
-# ------------------------------------------------------------
-# Copy project source
-# ------------------------------------------------------------
-
 COPY src/ ./src/
 COPY scripts/ ./scripts/
 COPY configs/ ./configs/
@@ -73,7 +65,7 @@ COPY data/README.md ./data/README.md
 COPY data/splits/ ./data/splits/
 
 # ------------------------------------------------------------
-# Install project package
+# Install project
 # ------------------------------------------------------------
 
 RUN pip install -e .

@@ -10,56 +10,36 @@ The project combines **medical image analysis** with **research-oriented softwar
 
 The final selected model is a **residual 3D U-Net** trained at **native voxel spacing without N4 bias-field correction**.
 
-The model was trained for 400 epochs, with the best validation checkpoint selected at **epoch 391**.
+The 400-epoch training run produced its best validation checkpoint at **epoch 391**, selected using the original 0.25-overlap validation evaluation.
 
-### Validation performance
+### Final model
 
-The training-selected checkpoint achieved the following validation Dice scores using the original sliding-window overlap of 0.25:
+| Configuration | Value |
+|---|---|
+| Architecture | Residual 3D U-Net |
+| Training duration | 400 epochs |
+| Selected checkpoint | Epoch 391 |
+| Voxel spacing | Native |
+| N4 bias correction | No |
+| Patch size | `96 × 96 × 96` |
+| Loss | Dice + cross-entropy |
 
-| Metric | Dice |
+The selected checkpoint achieved a **mean foreground Dice of 0.9185** on the five-subject validation set using the 0.25-overlap evaluation. The same checkpoint achieved **0.9188** when subsequently evaluated with 0.50 sliding-window overlap. This was an inference-time change only; the model weights and training procedure were unchanged.
+
+### Controlled experiments
+
+| Experiment | Mean foreground Dice |
 |---|---:|
-| Background | 0.9803 |
-| CSF | 0.8938 |
-| Gray matter | 0.9340 |
-| White matter | 0.9276 |
-| **Mean foreground Dice** | **0.9185** |
+| Native residual 3D U-Net — 100 epochs | 0.8840 |
+| Native residual 3D U-Net — 200 epochs | 0.9054 |
+| Native residual 3D U-Net — 300 epochs | 0.9114 |
+| **Native residual 3D U-Net — 400 epochs** | **0.9185** |
+| 1 mm isotropic | 0.8748 |
+| Conventional 3D U-Net | 0.8493 |
+| N4 preprocessing | 0.8777 |
+| CSF-weighted loss | 0.9167 |
 
-The same checkpoint was subsequently evaluated using a sliding-window overlap of **0.50**. No model weights, architecture, preprocessing, or training procedure were changed.
-
-| Inference configuration | Background | CSF | GM | WM | Mean foreground Dice |
-|---|---:|---:|---:|---:|---:|
-| Overlap 0.25 | 0.9803 | 0.8938 | 0.9340 | 0.9276 | 0.9185 |
-| **Overlap 0.50** | **0.9805** | **0.8942** | **0.9344** | **0.9280** | **0.9188** |
-
-The increase from 0.9185 to 0.9188 is an **inference-level refinement**, not a change in the trained model.
-
-### Training-duration study
-
-The same native-spacing residual 3D U-Net was progressively trained for longer durations:
-
-| Training duration | Best validation mean foreground Dice | Best epoch |
-|---:|---:|---:|
-| 100 epochs | 0.8840 | 99 |
-| 200 epochs | 0.9054 | 199 |
-| 300 epochs | 0.9114 | 290 |
-| **400 epochs** | **0.9185** | **391** |
-
-This experiment showed that continued optimization of the same architecture produced substantial improvements over shorter training runs.
-
-### Controlled experiment comparison
-
-| Experiment | Architecture | Spacing | N4 | Mean foreground Dice |
-|---|---|---|---|---:|
-| Native baseline — 100 epochs | Residual 3D U-Net | Native | No | 0.8840 |
-| Native — 200 epochs | Residual 3D U-Net | Native | No | 0.9054 |
-| Native — 300 epochs | Residual 3D U-Net | Native | No | 0.9114 |
-| **Native — 400 epochs** | **Residual 3D U-Net** | **Native** | **No** | **0.9185** |
-| 1 mm isotropic | Residual 3D U-Net | 1 mm isotropic | No | 0.8748 |
-| Conventional U-Net | Conventional 3D U-Net | Native | No | 0.8493 |
-| N4 preprocessing | Residual 3D U-Net | Native | Yes | 0.8777 |
-| CSF-weighted loss | Residual 3D U-Net | Native | No | 0.9167 |
-
-These controlled experiments document the effect of training duration, architecture, voxel spacing, N4 preprocessing, and class weighting under the evaluated configurations.
+These experiments indicate that, under the evaluated configurations, the selected native-spacing residual U-Net provided the strongest validation result. The detailed subject-level validation results and experimental analysis are provided below.
 
 ---
 
@@ -159,7 +139,7 @@ Mean foreground Dice =
 
 The final model is a **3D U-Net with residual units** implemented using MONAI.
 
-### Final configuration
+### Final model configuration
 
 - Architecture: Residual 3D U-Net
 - Input channels: 1
@@ -171,17 +151,32 @@ The final model is a **3D U-Net with residual units** implemented using MONAI.
 - Loss: Dice + cross-entropy
 - Voxel spacing: Native
 - N4 bias correction: Disabled
-- Sliding-window inference
-- Gaussian blending
-- Final validation overlap: `0.50`
 
-The final checkpoint is:
+### Checkpoint selection and final inference configuration
+
+The selected checkpoint is:
 
 ```text
 outputs/checkpoints/best_model.pt
 ```
-
 It corresponds to **epoch 391 of the 400-epoch training run**.
+
+The checkpoint was selected using the validation mean foreground Dice from the original **0.25 sliding-window overlap** evaluation, which achieved:
+
+```text
+Mean foreground Dice = 0.9185
+```
+
+The same checkpoint was subsequently evaluated using a 0.50 sliding-window overlap for the final inference configuration:
+
+ROI size: `96 × 96 × 96`
+Sliding-window batch size: `1`
+Overlap: `0.50`
+Gaussian blending
+No N4 correction
+No test-time augmentation
+
+This produced a mean foreground Dice of **0.9188** on the validation set. The 0.50 result is therefore an **inference-time evaluation of the selected checkpoint**, not a newly trained model.
 
 ---
 
@@ -239,7 +234,11 @@ Detailed experiment results are documented in [`docs/experiments.md`](docs/exper
 
 ## Quantitative validation
 
-The epoch-391 checkpoint was evaluated on the five held-out validation subjects.
+The validation results below provide the detailed quantitative evaluation of the selected epoch-391 checkpoint.
+
+**Checkpoint selection:** The checkpoint was selected using the original 0.25 sliding-window overlap evaluation, where the mean foreground Dice was 0.9185.
+
+**Final inference evaluation:** The same checkpoint was subsequently evaluated at 0.50 overlap. No model weights, architecture, preprocessing, training data, or checkpoint selection procedure were changed.
 
 ### Validation results — overlap 0.25
 
@@ -262,11 +261,11 @@ Overall:
 | WM | 0.9276 |
 | **Mean foreground** | **0.9185** |
 
-### Inference-overlap experiment
+### Inference-overlap evaluation
 
 The same epoch-391 checkpoint was evaluated again using a sliding-window overlap of `0.50`.
 
-This was an **inference-only experiment**. Model weights, training data, architecture, preprocessing, and checkpoint were unchanged.
+This was an **inference-only evaluation**. Model weights, training data, architecture, preprocessing, and checkpoint selection were unchanged.
 
 | Subject | Background | CSF Dice | GM Dice | WM Dice |
 |---|---:|---:|---:|---:|
@@ -282,21 +281,20 @@ The resulting mean foreground Dice was:
 ```text
 Overlap 0.25 → 0.9185
 Overlap 0.50 → 0.9188
+Δ mean foreground Dice = +0.0003
+
+The resulting mean foreground Dice was:
+
+```text
+Overlap 0.25 → 0.9185
+Overlap 0.50 → 0.9188
 
 Δ mean foreground Dice = +0.0003
 ```
 
-The class-wise changes were:
-
-```text
-CSF → +0.0004
-GM  → +0.0004
-WM  → +0.0004
-```
-
 The final inference configuration therefore uses **0.50 sliding-window overlap**.
 
-Because the improvement is small, it should be interpreted as an inference-level refinement rather than a substantive change in model capability.
+The small improvement should be interpreted as an inference-level refinement rather than a substantive change in model capability.
 
 ---
 
@@ -442,11 +440,9 @@ IBSR_15 was more challenging and showed:
 - simplified small CSF spaces;
 - several disconnected WM components requiring anatomical review.
 
-One larger disconnected WM component contained approximately 38,851 voxels and was localized to an inferior/posterior anatomical region. Its location, continuity, and surrounding tissue were more consistent with a structured anatomical region than random prediction noise.
+Detailed investigation of the disconnected components is documented in [`docs/test_qc.md`](docs/test_qc.md).
 
-A smaller 540-voxel WM component was also investigated. It was elongated and spatially structured, but its connectivity to the main WM component remained uncertain.
-
-These observations demonstrate why automated connected-component removal was **not** applied blindly: a disconnected component is not necessarily a segmentation error.
+These findings demonstrate why automated connected-component removal was **not** applied blindly: a disconnected component is not necessarily a segmentation error.
 
 ### Overall qualitative assessment
 
@@ -514,14 +510,15 @@ ibsr18-3d-unet/
 │
 ├── configs/
 │   ├── train.yaml
-│   └── finetune.yaml
+│   └── eval_overlap_050.yaml
 │
 ├── data/
 │   └── README.md
 │
 ├── docs/
 │   ├── architecture.md
-│   └── experiments.md
+│   ├── experiments.md
+│   └── test_qc.md
 │
 ├── scripts/
 │   ├── prepare_data.py
@@ -536,7 +533,9 @@ ibsr18-3d-unet/
 │   ├── predict_test.py
 │   ├── visualize_predictions.py
 │   ├── visualize_test_predictions.py
-│   └── check_test_predictions.py
+│   ├── check_test_predictions.py
+│   ├── inspect_ibsr15_csf.py
+│   └── inspect_ibsr15_wm_component.py
 │
 ├── src/
 │   └── ibsr_unet/
@@ -551,6 +550,8 @@ ibsr18-3d-unet/
 │
 ├── tests/
 │
+├── .dockerignore
+├── .gitignore
 ├── Dockerfile
 ├── Makefile
 ├── pyproject.toml
@@ -587,6 +588,40 @@ The project uses PyTorch and MONAI for volumetric deep learning and medical imag
 
 ---
 
+## Docker
+
+The repository includes a CUDA-enabled Docker environment for reproducible execution.
+
+The container is based on NVIDIA CUDA 12.6.3 with Python 3.11 and PyTorch 2.14.0 + CUDA 12.6.
+
+Build the image:
+
+```bash
+docker build -t ibsr18-3d-unet .
+```
+
+Run the container:
+
+```bash
+docker run --rm ibsr18-3d-unet
+```
+
+For NVIDIA GPU access:
+
+```bash
+docker run --rm --gpus all ibsr18-3d-unet
+```
+
+The GPU-enabled container has been validated with an NVIDIA GeForce GTX 1650, with PyTorch reporting:
+
+```text
+PyTorch: 2.14.0+cu126
+CUDA: True
+GPU: NVIDIA GeForce GTX 1650
+```
+
+The Docker image does not include the raw IBSR-18 MRI data. Dataset files should be prepared separately according to `data/README.md`.
+
 ## Configuration
 
 Training and experiment settings are stored in YAML configuration files:
@@ -594,7 +629,7 @@ Training and experiment settings are stored in YAML configuration files:
 ```text
 configs/
 ├── train.yaml
-└── finetune.yaml
+└── eval_overlap_050.yaml
 ```
 
 The main configuration separates:
@@ -656,7 +691,7 @@ python scripts/evaluate.py \
     --checkpoint outputs/checkpoints/best_model.pt
 ```
 
-The final reported validation configuration uses a sliding-window overlap of `0.50`.
+The final reported inference configuration uses a sliding-window overlap of `0.50`. The checkpoint itself was selected using the original 0.25-overlap validation evaluation.
 
 ---
 
@@ -751,6 +786,7 @@ More detailed technical documentation is available in:
 
 - [`docs/architecture.md`](docs/architecture.md) — model architecture, data flow, preprocessing, inference, QC, and software design.
 - [`docs/experiments.md`](docs/experiments.md) — controlled experiments, ablations, validation results, TTA evaluation, and interpretation of experimental findings.
+- [`docs/test_qc.md`](docs/test_qc.md) — automated test-prediction QC, geometry checks, connected components, and diagnostic interpretation.
 - `data/README.md` — dataset organization and preparation.
 
 ---
@@ -760,14 +796,23 @@ More detailed technical documentation is available in:
 Several limitations should be considered when interpreting the results:
 
 1. The dataset contains only 18 subjects.
-2. The public test split used here does not provide ground-truth labels, preventing quantitative test evaluation.
+
+2. The public test split does not provide ground-truth labels, preventing quantitative test evaluation.
+
 3. The validation set contains only five subjects, so the validation score should not be interpreted as a broad estimate of clinical performance.
+
 4. Qualitative inspection identified subject-dependent limitations, particularly around fine GM/WM boundaries and small CSF structures.
+
 5. Some disconnected prediction components occur in difficult test cases and require anatomical interpretation rather than automatic removal.
+
 6. MRI foreground containment checks use non-zero image voxels as a conservative proxy and should not be interpreted as a true anatomical brain mask.
+
 7. The model was evaluated on IBSR-18 and should not be assumed to generalize directly to other scanners, acquisition protocols, datasets, or clinical populations.
+
 8. The final checkpoint was selected using the held-out validation set. Evaluation on an independent external dataset would provide a stronger assessment of generalization.
-9. The 0.50 sliding-window overlap experiment produced only a small improvement over 0.25.
+
+9. The 0.50 sliding-window overlap produced only a small improvement over 0.25.
+
 10. The CSF-weighted loss experiment slightly improved CSF Dice but reduced GM, WM, and overall mean foreground Dice under the tested configuration.
 
 ---
@@ -776,48 +821,13 @@ Several limitations should be considered when interpreting the results:
 
 This project demonstrates an end-to-end workflow for **3D medical image segmentation**, covering dataset validation, controlled preprocessing experiments, model development, training, checkpoint selection, quantitative validation, native-space inference, automated QC, and qualitative assessment.
 
-The selected model is a:
+The selected model is a **Residual 3D U-Net operating at native voxel spacing without N4 bias-field correction**. The best validation checkpoint was obtained at **epoch 391 of the 400-epoch training run**, based on the original 0.25-overlap evaluation.
 
-> **Residual 3D U-Net operating at native voxel spacing without N4 bias-field correction.**
-
-The progressively longer training experiments produced:
-
-```text
-100 epochs  → 0.8840
-200 epochs  → 0.9054
-300 epochs  → 0.9114
-400 epochs  → 0.9185
-```
-
-The final selected checkpoint was **epoch 391**, with:
-
-```text
-CSF Dice = 0.8938
-GM Dice  = 0.9340
-WM Dice  = 0.9276
-
-Mean foreground Dice = 0.9185
-```
-
-Using the same checkpoint with sliding-window overlap increased from 0.25 to 0.50 produced:
-
-```text
-Mean foreground Dice = 0.9188
-Δ = +0.0003
-```
-
-The CSF-weighted experiment reached:
-
-```text
-CSF Dice              = 0.8953
-GM Dice               = 0.9315
-WM Dice               = 0.9233
-Mean foreground Dice  = 0.9167
-```
-
-and was therefore retained as a controlled experiment rather than the final model.
+The same checkpoint was subsequently evaluated with 0.50 sliding-window overlap for the final inference configuration, producing a small improvement in validation Dice. Controlled experiments with voxel-spacing normalization, conventional U-Net architecture, N4 preprocessing, and CSF-weighted loss did not outperform the selected baseline under the evaluated configurations.
 
 The project emphasizes not only segmentation performance, but also **controlled experimentation, reproducibility, software quality, quantitative validation, diagnostic QC, and careful interpretation of model predictions**.
+
+The main limitations are the small dataset size, absence of quantitative labels for the test split, subject-dependent segmentation challenges, and the lack of external validation.
 
 ---
 

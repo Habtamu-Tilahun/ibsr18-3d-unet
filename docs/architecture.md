@@ -63,11 +63,12 @@ ibsr18-3d-unet/
 │   └── lint.yml
 ├── configs/
 │   ├── train.yaml
-│   └── finetune.yaml
+│   └── eval_overlap_050.yaml
 ├── data/README.md
 ├── docs/
 │   ├── architecture.md
-│   └── experiments.md
+│   ├── experiments.md
+│   └── test_qc.md
 ├── scripts/
 │   ├── analyze_labels.py
 │   ├── check_test_predictions.py
@@ -81,7 +82,9 @@ ibsr18-3d-unet/
 │   ├── smoke_test_n4.py
 │   ├── train.py
 │   ├── visualize_predictions.py
-│   └── visualize_test_predictions.py
+│   ├── visualize_test_predictions.py
+│   ├── inspect_ibsr15_csf.py
+│   └── inspect_ibsr15_wm_component.py
 ├── src/ibsr_unet/
 │   ├── config/schema.py
 │   ├── data/
@@ -111,7 +114,10 @@ ibsr18-3d-unet/
 │   ├── test_losses.py
 │   ├── test_metrics.py
 │   ├── test_model.py
+│   ├── test_trainer.py
 │   └── test_transforms.py
+├── .dockerignore
+├── .gitignore
 ├── Dockerfile
 ├── LICENSE
 ├── Makefile
